@@ -1,0 +1,17 @@
+# Human-participant data must never enter Git history.
+data/
+results/
+*.eeg
+*.vhdr
+*.vmrk
+*.set
+*.fdt
+*.fif
+*.mat
+
+# Local runtime/cache files.
+.cache/
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store

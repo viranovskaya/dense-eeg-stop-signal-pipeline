@@ -1,0 +1,11 @@
+marker,role,trial_class,interpretation,confidence
+S17,stimulus,go,go stimulus variant A,high
+S18,stimulus,go,go stimulus variant B,high
+S6,outcome,go,correct go response,high
+S4,outcome,go,incorrect or too-slow go response,high
+S1,stimulus,stop,stop-trial stimulus variant A,high
+S2,stimulus,stop,stop-trial stimulus variant B,high
+S19,signal,stop,stop signal,high
+S5,outcome,stop,response after stop signal (failed stop),high
+S7,unknown,exclude,rare unresolved or aborted event,low
+

@@ -1,0 +1,16 @@
+{
+  "line_frequency_hz": 50.0,
+  "filter_hz": [1.0, 40.0],
+  "montage": "standard_1005",
+  "reference": "average EEG only",
+  "channel_types": {
+    "ECG": "ecg",
+    "EOG": "eog"
+  },
+  "epochs_seconds": {
+    "go": [-1.5, 3.0],
+    "stop": [-2.0, 2.0]
+  },
+  "unknown_events_excluded": ["S7"]
+}
+
