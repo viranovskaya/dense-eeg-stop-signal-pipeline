@@ -2,36 +2,30 @@
 
 [![CI](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/actions/workflows/ci.yml)
 
-A reproducible Python/MNE workflow for quality control, preprocessing, and event reconstruction in 129-channel BrainVision EEG recorded during a stop-signal task.
+A Python/MNE workflow for 129-channel BrainVision EEG recorded during a stop-signal task. This project started from real recordings, short preprocessing notes, old EEGLAB files, and marker sequences whose meaning had to be reconstructed before the data could be analysed again.
 
-## What works now
+My first goal was to recover what had actually been done to the data. I then wrote a new pipeline in which the event rules, bad-channel decisions, reference, and output files can be checked for every participant.
 
-### Implemented
+## Current result
 
-- non-destructive BrainVision import, including a compatibility path for malformed legacy measurement dates;
-- ECG/EOG typing and standard 10-05 montage assignment;
-- dataset-level QC with channel-amplitude, flatness, PSD, and 50 Hz metrics;
+- BrainVision import, including a fix for malformed dates in old marker files;
+- correct ECG/EOG channel types and a standard 10-05 montage;
+- QC based on amplitude, flat segments, PSD, and 50 Hz noise;
 - reconstruction of go, successful-stop, failed-stop, and unresolved trials;
-- explicit bad-channel manifests followed by EEG-only interpolation;
-- 1–40 Hz filtering and EEG-only common-average reference;
-- continuous, go-epoch, and stop-epoch export to FIF and EEGLAB `.set`;
-- C3/C4 low-pass ERP summaries for go- and stop-locked epochs.
+- reviewed bad-channel lists followed by EEG-channel interpolation;
+- 1–40 Hz filtering and EEG-only average reference;
+- continuous, go-locked, and stop-locked files in FIF and EEGLAB `.set` formats;
+- low-pass C3/C4 ERP summaries for the first motor-response checks.
 
-### Validated locally
-
-The QC and preprocessing commands have run end to end on 10 complete recordings (121.7 minutes of 129-channel EEG at 1000 Hz). All 10 produced continuous, go-epoch, and stop-epoch files in both FIF and EEGLAB formats. The public repository contains code and tests only; participant data and participant-level reports remain local.
+I ran the complete QC and preprocessing workflow on 10 recordings: 121.7 minutes of 129-channel EEG sampled at 1000 Hz. All 10 produced continuous, go-locked, and stop-locked files in both formats. The recordings and participant reports are not included in the repository.
 
 The event mapping was cross-checked against the original marker sequences and preserved condition datasets. Automated bad-channel flags were reviewed across five recording windows before persistent channels were approved for interpolation.
 
-### Not implemented yet
+## What I am doing next
 
-- ICA fitting and component rejection with an explicit decision table;
+- ICA fitting and a saved table of component decisions;
 - systematic time-frequency and scalp-topography summaries;
 - template-based exploratory source localization.
-
-## My contribution
-
-I reconstructed the task and preprocessing history from dataset notes, BrainVision markers, saved EEGLAB histories, and condition files. I then translated that reconstruction into the Python/MNE pipeline in this repository, added dataset-level QC, made channel and reference decisions explicit, and tested the workflow on the available recordings.
 
 ## Recovered event logic
 
@@ -44,7 +38,7 @@ I reconstructed the task and preprocessing history from dataset notes, BrainVisi
 - no `S5` before the next trial: successful stop;
 - `S7`: rare unresolved sequence, excluded from confirmatory analysis.
 
-The evidence and unresolved points are documented in [`docs/recovered_protocol.md`](docs/recovered_protocol.md).
+I describe where this mapping came from, and what is still uncertain, in [`docs/recovered_protocol.md`](docs/recovered_protocol.md).
 
 ## Run quality control
 
@@ -64,7 +58,7 @@ python scripts/run_dataset_qc.py \
   --output results/dataset-qc
 ```
 
-The QC stage writes CSV/JSON summaries, figures, and a Markdown report. Candidate bad channels are never removed automatically: they must be confirmed visually and recorded in a manifest. ECG/EOG are not interpolated or included in the EEG reference.
+The QC stage writes CSV/JSON summaries, figures, and a Markdown report. It only suggests possible bad channels. I check them visually and record the final decision in a manifest. ECG and EOG are not interpolated or included in the EEG reference.
 
 ## Run preprocessing
 
@@ -95,16 +89,12 @@ A MATLAB/EEGLAB implementation of the recovered workflow is available in [`matla
 python -m unittest discover -s tests -v
 ```
 
-The tests exercise marker normalization and trial reconstruction, including the rule that `S7` sequences remain unclassified. The same suite runs automatically on every pull request.
+The tests cover marker normalisation and trial reconstruction, including the rule that `S7` sequences remain unclassified. They also run automatically on every pull request.
 
-## Next milestone
+## What the available data allow
 
-The next analysis step is ICA on continuous filtered EEG. Each rejected component will be stored with its component number, decision, reason, and reviewer before subtraction. ERP/time-frequency summaries will follow only after those decisions are reproducible.
-
-## Data and interpretation boundary
-
-Raw and processed participant files are excluded by `.gitignore`. The available files do not include group labels, individual MRI, or digitized electrode positions, so group comparisons cannot be reconstructed and source localization can only be template-based and exploratory.
+The public repository contains code and tests, not participant recordings. The files available to me also do not include group labels, individual MRI, or digitised electrode positions. Therefore I cannot reconstruct the group comparison, and any later source localisation would have to use a template and remain exploratory.
 
 ## Citation and license
 
-Citation metadata are provided in [`CITATION.cff`](CITATION.cff). The code is released under the [MIT License](LICENSE); participant data are not distributed under this license.
+Citation information is in [`CITATION.cff`](CITATION.cff). The code is released under the [MIT License](LICENSE).
