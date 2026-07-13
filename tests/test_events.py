@@ -13,6 +13,7 @@ import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+os.environ.setdefault("MPLBACKEND", "Agg")
 os.environ.setdefault("_MNE_FAKE_HOME_DIR", str(PROJECT_ROOT))
 os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / ".cache" / "matplotlib"))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
