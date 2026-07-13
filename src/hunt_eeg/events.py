@@ -46,7 +46,6 @@ def classify_trials(markers: list[dict]) -> pd.DataFrame:
     for index, current in enumerate(markers):
         marker = current["marker"]
         following = markers[index + 1] if index + 1 < len(markers) else None
-        following_two = markers[index + 2] if index + 2 < len(markers) else None
 
         if marker in {"S17", "S18"}:
             outcome = following["marker"] if following else None
@@ -76,19 +75,41 @@ def classify_trials(markers: list[dict]) -> pd.DataFrame:
 
         elif marker in {"S1", "S2"}:
             if following and following["marker"] == "S19":
-                failed = bool(following_two and following_two["marker"] == "S5")
+                # Inspect the complete post-stop sequence, stopping at the next
+                # trial onset. S7 is unresolved in the recovered protocol and
+                # must never be counted as successful inhibition.
+                post_stop = []
+                for later in markers[index + 2 :]:
+                    if later["marker"] in {"S17", "S18", "S1", "S2"}:
+                        break
+                    post_stop.append(later)
+                post_stop_codes = {item["marker"] for item in post_stop}
+                response = next(
+                    (item for item in post_stop if item["marker"] == "S5"),
+                    None,
+                )
+                unresolved = "S7" in post_stop_codes
+                if unresolved:
+                    trial_class = "stop_unclassified"
+                    outcome_code = "S7"
+                elif response is not None:
+                    trial_class = "stop_failed"
+                    outcome_code = "S5"
+                else:
+                    trial_class = "stop_successful"
+                    outcome_code = None
                 rows.append(
                     {
                         "trial_index": len(rows) + 1,
                         "trial_type": "stop",
-                        "trial_class": "stop_failed" if failed else "stop_successful",
+                        "trial_class": trial_class,
                         "stimulus_code": marker,
                         "stimulus_onset_s": current["onset_s"],
                         "stop_signal_onset_s": following["onset_s"],
-                        "outcome_code": "S5" if failed else None,
+                        "outcome_code": outcome_code,
                         "response_time_ms": (
-                            (following_two["onset_s"] - current["onset_s"]) * 1000
-                            if failed
+                            (response["onset_s"] - current["onset_s"]) * 1000
+                            if response is not None and not unresolved
                             else None
                         ),
                         "stop_signal_delay_ms": (
@@ -119,6 +140,10 @@ def marker_counts(markers: list[dict]) -> pd.DataFrame:
     """Count normalized stimulus markers."""
     counts = Counter(marker["marker"] for marker in markers)
     return pd.DataFrame(
-        [{"marker": marker, "count": count} for marker, count in sorted(counts.items())]
+        [
+            {"marker": marker, "count": count}
+            for marker, count in sorted(
+                counts.items(), key=lambda item: int(item[0].removeprefix("S"))
+            )
+        ]
     )
-
