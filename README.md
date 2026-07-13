@@ -1,29 +1,54 @@
 # Dense-EEG stop-signal pipeline
 
-Reproducible quality control and preprocessing scaffold for 129-channel BrainVision EEG recorded during a stop-signal task.
+[![CI](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/actions/workflows/ci.yml)
 
-## Status
+A reproducible Python/MNE workflow for quality control, preprocessing, and event reconstruction in 129-channel BrainVision EEG recorded during a stop-signal task.
 
-The repository currently implements a non-destructive raw-data QC pilot and reconstructs the task event logic from the original BrainVision markers and a preserved EEGLAB history. Human-participant data are not included.
+## What works now
 
-Verified event logic:
+### Implemented
+
+- non-destructive BrainVision import, including a compatibility path for malformed legacy measurement dates;
+- ECG/EOG typing and standard 10-05 montage assignment;
+- dataset-level QC with channel-amplitude, flatness, PSD, and 50 Hz metrics;
+- reconstruction of go, successful-stop, failed-stop, and unresolved trials;
+- explicit bad-channel manifests followed by EEG-only interpolation;
+- 1–40 Hz filtering and EEG-only common-average reference;
+- continuous, go-epoch, and stop-epoch export to FIF and EEGLAB `.set`;
+- C3/C4 low-pass ERP summaries for go- and stop-locked epochs.
+
+### Validated locally
+
+The QC and preprocessing commands have run end to end on 10 complete recordings (121.7 minutes of 129-channel EEG at 1000 Hz). All 10 produced continuous, go-epoch, and stop-epoch files in both FIF and EEGLAB formats. The public repository contains code and tests only; participant data and participant-level reports remain local.
+
+The event mapping was cross-checked against the original marker sequences and preserved condition datasets. Automated bad-channel flags were reviewed across five recording windows before persistent channels were approved for interpolation.
+
+### Not implemented yet
+
+- ICA fitting and component rejection with an explicit decision table;
+- systematic time-frequency and scalp-topography summaries;
+- template-based exploratory source localization.
+
+## My contribution
+
+I reconstructed the task and preprocessing history from dataset notes, BrainVision markers, saved EEGLAB histories, and condition files. I then translated that reconstruction into the Python/MNE pipeline in this repository, added dataset-level QC, made channel and reference decisions explicit, and tested the workflow on the available recordings.
+
+## Recovered event logic
 
 - `S17`, `S18`: go-stimulus variants;
 - `S6`: correct go response;
 - `S4`: incorrect or too-slow go response;
 - `S1`, `S2`: stimulus variants on stop trials;
 - `S19`: stop signal;
-- `S5`: response after the stop signal, therefore failed/bad stop;
-- a stop trial without `S5` before the next trial is a successful/good stop;
-- `S7`: rare unresolved event, excluded from confirmatory analysis.
+- `S5` after `S19`: failed stop;
+- no `S5` before the next trial: successful stop;
+- `S7`: rare unresolved sequence, excluded from confirmatory analysis.
 
-The recovered protocol and its reproducibility caveats are documented in [`docs/recovered_protocol.md`](docs/recovered_protocol.md).
+The evidence and unresolved points are documented in [`docs/recovered_protocol.md`](docs/recovered_protocol.md).
 
-## Safety
+## Run quality control
 
-Raw and processed participant files are excluded by `.gitignore`. Do not commit `.eeg`, `.vhdr`, `.vmrk`, `.set`, `.fif`, `.mat`, participant tables, or participant-level QC reports without explicit data-owner and ethics approval.
-
-## Run a QC pilot
+For one recording:
 
 ```bash
 python scripts/run_qc.py \
@@ -31,17 +56,7 @@ python scripts/run_qc.py \
   --output results/sub-001
 ```
 
-The QC command:
-
-1. reads BrainVision data without modifying it;
-2. marks ECG and EOG as non-EEG channels;
-3. attaches the standard 10-05 montage for visualization;
-4. reconstructs go, successful-stop, and failed-stop trials;
-5. computes representative channel-amplitude and spectral metrics;
-6. flags candidate bad channels for visual confirmation;
-7. writes CSV/JSON summaries and a Markdown report.
-
-To run the same checks for every `.vhdr` file in one directory:
+For all `.vhdr` files in a directory:
 
 ```bash
 python scripts/run_dataset_qc.py \
@@ -49,9 +64,11 @@ python scripts/run_dataset_qc.py \
   --output results/dataset-qc
 ```
 
-Candidate bad channels are **not** removed automatically. After visual confirmation they should be marked and interpolated from neighboring EEG electrodes. ECG/EOG must not be interpolated and are excluded from the average reference and EEG ICA.
+The QC stage writes CSV/JSON summaries, figures, and a Markdown report. Candidate bad channels are never removed automatically: they must be confirmed visually and recorded in a manifest. ECG/EOG are not interpolated or included in the EEG reference.
 
-To create a processed continuous file and go/stop epochs for one participant:
+## Run preprocessing
+
+For one participant:
 
 ```bash
 python scripts/run_preprocess.py \
@@ -61,9 +78,7 @@ python scripts/run_preprocess.py \
   --output results/processed/sub-001
 ```
 
-The command writes local FIF and EEGLAB `.set` versions. Processed participant data remain ignored by Git. A MATLAB/EEGLAB implementation is also provided in [`matlab/preprocess_eeglab.m`](matlab/preprocess_eeglab.m).
-
-After QC decisions have been saved in a manifest, the same operation can be applied to the complete directory:
+For a complete directory with reviewed channel decisions:
 
 ```bash
 python scripts/run_dataset_preprocess.py \
@@ -72,24 +87,24 @@ python scripts/run_dataset_preprocess.py \
   --output results/processed
 ```
 
-## Planned preprocessing
+A MATLAB/EEGLAB implementation of the recovered workflow is available in [`matlab/preprocess_eeglab.m`](matlab/preprocess_eeglab.m).
 
-- assign channel types and standard montage;
-- inspect and mark bad EEG channels;
-- 1–40 Hz filtering;
-- average reference using EEG channels only;
-- interpolate confirmed bad EEG channels;
-- epoch go trials around `S17/S18` (−1.5 to 3.0 s);
-- epoch stop trials around `S19` (−2.0 to 2.0 s);
-- split successful and failed stop trials using the presence of `S5`;
-- fit ICA on continuous filtered EEG, inspect components, and record every rejected component explicitly;
-- create C3/C4 and premotor/motor ERP and time-frequency summaries;
-- treat template-based source localization as exploratory.
+## Test
 
-## Reproducibility boundary
+```bash
+python -m unittest discover -s tests -v
+```
 
-The available files do not encode age group, cultural/language group, individual MRI, or digitized electrode positions. Those factors cannot be reconstructed or used for confirmatory group inference. Template-based source results must be presented as approximate and exploratory.
+The tests exercise marker normalization and trial reconstruction, including the rule that `S7` sequences remain unclassified. The same suite runs automatically on every pull request.
+
+## Next milestone
+
+The next analysis step is ICA on continuous filtered EEG. Each rejected component will be stored with its component number, decision, reason, and reviewer before subtraction. ERP/time-frequency summaries will follow only after those decisions are reproducible.
+
+## Data and interpretation boundary
+
+Raw and processed participant files are excluded by `.gitignore`. The available files do not include group labels, individual MRI, or digitized electrode positions, so group comparisons cannot be reconstructed and source localization can only be template-based and exploratory.
 
 ## Citation and license
 
-Citation metadata are provided in [`CITATION.cff`](CITATION.cff). The analysis code is released under the [MIT License](LICENSE); participant data are not distributed under this license.
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff). The code is released under the [MIT License](LICENSE); participant data are not distributed under this license.
