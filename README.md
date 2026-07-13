@@ -89,3 +89,7 @@ python scripts/run_dataset_preprocess.py \
 ## Reproducibility boundary
 
 The available files do not encode age group, cultural/language group, individual MRI, or digitized electrode positions. Those factors cannot be reconstructed or used for confirmatory group inference. Template-based source results must be presented as approximate and exploratory.
+
+## Citation and license
+
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff). The analysis code is released under the [MIT License](LICENSE); participant data are not distributed under this license.

@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Dense-EEG Stop-Signal Pipeline"
+type: software
+authors:
+  - family-names: Agafonova
+    given-names: Daria
+repository-code: "https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline"
+license: MIT
+version: 0.1.0
+date-released: 2026-07-13
