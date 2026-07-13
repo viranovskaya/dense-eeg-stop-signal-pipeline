@@ -2,21 +2,30 @@
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+os.environ.setdefault("_MNE_FAKE_HOME_DIR", str(PROJECT_ROOT))
+os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / ".cache" / "matplotlib"))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from hunt_eeg.events import classify_trials, marker_counts, normalize_marker
+from hunt_eeg.qc import _read_brainvision_compat
 
 
 def marker(onset: float, code: str) -> dict:
     return {"onset_s": onset, "duration_s": 0.0, "marker": code}
+
+
+FIXTURES = PROJECT_ROOT / "tests" / "fixtures"
 
 
 class EventLogicTests(unittest.TestCase):
@@ -25,19 +34,7 @@ class EventLogicTests(unittest.TestCase):
         self.assertEqual(normalize_marker("S  5"), "S5")
 
     def test_go_and_stop_outcomes(self):
-        markers = [
-            marker(0.0, "S17"),
-            marker(0.5, "S6"),
-            marker(1.0, "S18"),
-            marker(1.7, "S4"),
-            marker(2.0, "S1"),
-            marker(2.25, "S19"),
-            marker(2.42, "S5"),
-            marker(3.0, "S2"),
-            marker(3.30, "S19"),
-            marker(5.0, "S17"),
-            marker(5.55, "S6"),
-        ]
+        markers = pd.read_csv(FIXTURES / "stop_signal_markers.csv").to_dict("records")
         trials = classify_trials(markers)
         self.assertEqual(
             trials["trial_class"].tolist(),
@@ -46,11 +43,13 @@ class EventLogicTests(unittest.TestCase):
                 "go_incorrect_or_slow",
                 "stop_failed",
                 "stop_successful",
+                "stop_unclassified",
                 "go_correct",
             ],
         )
         self.assertAlmostEqual(trials.iloc[0]["response_time_ms"], 500.0)
         self.assertAlmostEqual(trials.iloc[2]["stop_signal_delay_ms"], 250.0)
+        self.assertEqual(trials.iloc[4]["outcome_code"], "S7")
 
     def test_s7_after_stop_signal_is_unclassified(self):
         markers = [
@@ -79,6 +78,50 @@ class EventLogicTests(unittest.TestCase):
                 {"marker": "S19", "count": 2},
             ],
         )
+
+    def test_brainvision_reader_uses_temporary_marker_when_date_is_malformed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = root / "sample.vhdr"
+            marker_file = root / "sample.vmrk"
+            data_file = root / "sample.eeg"
+            data_file.write_bytes(b"")
+            header.write_text(
+                "Brain Vision Data Exchange Header File Version 1.0\n"
+                "[Common Infos]\n"
+                "DataFile=sample.eeg\n"
+                "MarkerFile=sample.vmrk\n",
+                encoding="utf-8",
+            )
+            marker_file.write_text(
+                "Brain Vision Data Exchange Marker File, Version 1.0\n"
+                "[Common Infos]\n"
+                "DataFile=sample.eeg\n"
+                "[Marker Infos]\n"
+                "Mk1=New Segment,,1,1,0,202001011200001234567\n",
+                encoding="utf-8",
+            )
+            calls = []
+
+            def fake_reader(path, preload=False, verbose=None):
+                calls.append(Path(path))
+                if len(calls) == 1:
+                    raise ValueError("unconverted data remains: 7")
+                rewritten_marker = calls[1].with_suffix(".vmrk")
+                self.assertIn(
+                    "00000000000000000000",
+                    rewritten_marker.read_text(encoding="utf-8"),
+                )
+                self.assertIn(
+                    f"DataFile={data_file.resolve()}",
+                    rewritten_marker.read_text(encoding="utf-8"),
+                )
+                return "raw"
+
+            with patch("mne.io.read_raw_brainvision", side_effect=fake_reader):
+                self.assertEqual(_read_brainvision_compat(header), "raw")
+
+            self.assertEqual(len(calls), 2)
 
 
 if __name__ == "__main__":

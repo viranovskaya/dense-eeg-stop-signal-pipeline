@@ -6,7 +6,7 @@ A Python/MNE workflow for 129-channel BrainVision EEG recorded during a stop-sig
 
 My first goal was to recover what had actually been done to the data. I then wrote a new pipeline in which the event rules, bad-channel decisions, reference, and output files can be checked for every participant.
 
-## Current result
+## Implemented and checked
 
 - BrainVision import, including a fix for malformed dates in old marker files;
 - correct ECG/EOG channel types and a standard 10-05 montage;
@@ -19,13 +19,15 @@ My first goal was to recover what had actually been done to the data. I then wro
 
 I ran the complete QC and preprocessing workflow on 10 recordings: 121.7 minutes of 129-channel EEG sampled at 1000 Hz. All 10 produced continuous, go-locked, and stop-locked files in both formats. The recordings and participant reports are not included in the repository.
 
-The event mapping was cross-checked against the original marker sequences and preserved condition datasets. Automated bad-channel flags were reviewed across five recording windows before persistent channels were approved for interpolation.
+The event mapping is covered by synthetic regression tests and was cross-checked against the original marker sequences and preserved condition datasets. Automated bad-channel flags were reviewed across five recording windows before persistent channels were approved for interpolation.
 
-## What I am doing next
+## Planned, not yet claimed as results
 
 - ICA fitting and a saved table of component decisions;
 - systematic time-frequency and scalp-topography summaries;
 - template-based exploratory source localization.
+
+These steps are intentionally listed as planned. The public repository should not read as if ICA cleaning or source localization has already been completed.
 
 ## Recovered event logic
 
@@ -89,7 +91,7 @@ A MATLAB/EEGLAB implementation of the recovered workflow is available in [`matla
 python -m unittest discover -s tests -v
 ```
 
-The tests cover marker normalisation and trial reconstruction, including the rule that `S7` sequences remain unclassified. They also run automatically on every pull request.
+The tests cover marker normalisation, trial reconstruction from a synthetic marker fixture, the rule that `S7` sequences remain unclassified, and the compatibility path for malformed BrainVision marker dates. They also run automatically on every pull request.
 
 ## What the available data allow
 
