@@ -5,6 +5,7 @@ type: software
 authors:
   - family-names: Agafonova
     given-names: Daria
+    orcid: "https://orcid.org/0009-0009-3819-9362"
 repository-code: "https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline"
 license: MIT
 version: 0.1.0
