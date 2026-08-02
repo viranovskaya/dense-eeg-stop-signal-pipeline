@@ -2,49 +2,67 @@
 
 [![CI](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/actions/workflows/ci.yml)
 
-A Python/MNE workflow for 129-channel BrainVision EEG recorded during a stop-signal task. This project started from real recordings, short preprocessing notes, old EEGLAB files, and marker sequences whose meaning had to be reconstructed before the data could be analysed again.
+## Purpose
 
-My first goal was to recover what had actually been done to the data. I then wrote a new pipeline in which the event rules, bad-channel decisions, reference, and output files can be checked for every participant.
+This repository reconstructs and makes auditable a preprocessing workflow for 129-channel BrainVision EEG recorded during a stop-signal task.
 
-## Implemented and checked
+## Practical problem
 
-- BrainVision import, including a fix for malformed dates in old marker files;
-- correct ECG/EOG channel types and a standard 10-05 montage;
-- QC based on amplitude, flat segments, PSD, and 50 Hz noise;
+The available recordings were accompanied by short notes, old EEGLAB files, and marker sequences, but not a complete reproducible record of event mapping, bad-channel decisions, rereferencing, or component rejection. The project separates what can be recovered from what must be decided explicitly in a new run.
+
+## What I implemented
+
+I implemented:
+
+- BrainVision import, including a compatibility path for malformed marker dates;
+- ECG/EOG typing and a standard 10-05 montage;
+- amplitude, flat-segment, PSD, and 50 Hz QC summaries;
 - reconstruction of go, successful-stop, failed-stop, and unresolved trials;
-- reviewed bad-channel lists followed by EEG-channel interpolation;
-- 1–40 Hz filtering and EEG-only average reference;
-- continuous, go-locked, and stop-locked files in FIF and EEGLAB `.set` formats;
-- low-pass C3/C4 ERP summaries for the first motor-response checks.
+- explicit reviewed bad-channel manifests before EEG interpolation;
+- 1--40 Hz filtering and EEG-only average reference;
+- continuous, go-locked, and stop-locked FIF and EEGLAB exports;
+- low-pass C3/C4 ERP summaries for initial motor-response checks.
 
-I ran the complete QC and preprocessing workflow on 10 recordings: 121.7 minutes of 129-channel EEG sampled at 1000 Hz. All 10 produced continuous, go-locked, and stop-locked files in both formats. The recordings and participant reports are not included in the repository.
+The recovered marker logic and evidence are documented in [`docs/recovered_protocol.md`](docs/recovered_protocol.md).
 
-The event mapping is covered by synthetic regression tests and was cross-checked against the original marker sequences and preserved condition datasets. Automated bad-channel flags were reviewed across five recording windows before persistent channels were approved for interpolation.
+## Data and sample
 
-## Planned, not yet claimed as results
+I evaluated the complete QC and preprocessing workflow on 10 private recordings: 121.7 minutes of 129-channel EEG sampled at 1000 Hz. Participant recordings and reports are not tracked in this repository.
 
-- ICA fitting and a saved table of component decisions;
-- systematic time-frequency and scalp-topography summaries;
-- template-based exploratory source localization.
+The public test data are a synthetic marker fixture. The available research material has no group labels, individual MRI, or digitized electrode positions.
 
-These steps are intentionally listed as planned. The public repository should not read as if ICA cleaning or source localization has already been completed.
+## Validated outputs
 
-## Recovered event logic
+All 10 evaluated recordings produced continuous, go-locked, and stop-locked datasets in FIF and EEGLAB formats. Event reconstruction was cross-checked against original marker sequences and preserved condition datasets. Automated bad-channel candidates were reviewed across five recording windows before persistent channels were approved for interpolation.
 
-- `S17`, `S18`: go-stimulus variants;
-- `S6`: correct go response;
-- `S4`: incorrect or too-slow go response;
-- `S1`, `S2`: stimulus variants on stop trials;
-- `S19`: stop signal;
-- `S5` after `S19`: failed stop;
-- no `S5` before the next trial: successful stop;
-- `S7`: rare unresolved sequence, excluded from confirmatory analysis.
+Synthetic regression tests cover marker normalization, trial reconstruction, unresolved `S7` sequences, malformed BrainVision dates, preprocessing order, and export contracts.
 
-I describe where this mapping came from, and what is still uncertain, in [`docs/recovered_protocol.md`](docs/recovered_protocol.md).
+## Reproducibility
 
-## Run quality control
+Configuration lives in [`config/analysis.json`](config/analysis.json) and [`config/event_codebook.csv`](config/event_codebook.csv). The Python and MATLAB implementations preserve the recovered event definitions, while the Python workflow records reviewed bad channels explicitly.
 
-For one recording:
+CI installs the declared dependency ranges on Python 3.12, runs the synthetic unit suite, and compiles Python sources. Real participant-level reproduction requires separately controlled source files and the reviewed bad-channel manifest; those inputs are not public.
+
+## Limitations
+
+- Exact original bad-channel and ICA-rejection decisions cannot be recovered from the preserved history.
+- ICA fitting and an explicit component-decision table are not yet implemented as completed results.
+- Group comparisons cannot be reconstructed without group labels.
+- Source localization would be template-based and exploratory because individual MRI and digitized geometry are unavailable.
+- The dependency file gives supported ranges; an exact cross-machine environment for the private 10-recording run is not yet published.
+
+## Installation and run
+
+```bash
+git clone https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline.git
+cd dense-eeg-stop-signal-pipeline
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+```
+
+Quality control for one recording:
 
 ```bash
 python scripts/run_qc.py \
@@ -52,19 +70,7 @@ python scripts/run_qc.py \
   --output results/sub-001
 ```
 
-For all `.vhdr` files in a directory:
-
-```bash
-python scripts/run_dataset_qc.py \
-  --input-dir /path/to/brainvision-folder \
-  --output results/dataset-qc
-```
-
-The QC stage writes CSV/JSON summaries, figures, and a Markdown report. It only suggests possible bad channels. I check them visually and record the final decision in a manifest. ECG and EOG are not interpolated or included in the EEG reference.
-
-## Run preprocessing
-
-For one participant:
+Preprocessing after manual bad-channel review:
 
 ```bash
 python scripts/run_preprocess.py \
@@ -74,29 +80,16 @@ python scripts/run_preprocess.py \
   --output results/processed/sub-001
 ```
 
-For a complete directory with reviewed channel decisions:
+Dataset-level commands are available in `scripts/run_dataset_qc.py` and `scripts/run_dataset_preprocess.py`. A recovered EEGLAB implementation is in [`matlab/preprocess_eeglab.m`](matlab/preprocess_eeglab.m).
 
-```bash
-python scripts/run_dataset_preprocess.py \
-  --input-dir /path/to/brainvision-folder \
-  --bad-channel-manifest results/dataset-qc/bad_channels_manifest.csv \
-  --output results/processed
-```
+## Citation
 
-A MATLAB/EEGLAB implementation of the recovered workflow is available in [`matlab/preprocess_eeglab.m`](matlab/preprocess_eeglab.m).
+Use [`CITATION.cff`](CITATION.cff). GitHub release `v0.1.0` is available, and the code is released under the [MIT License](LICENSE).
 
-## Test
+## Current status
 
-```bash
-python -m unittest discover -s tests -v
-```
-
-The tests cover marker normalisation, trial reconstruction from a synthetic marker fixture, the rule that `S7` sequences remain unclassified, and the compatibility path for malformed BrainVision marker dates. They also run automatically on every pull request.
-
-## What the available data allow
-
-The public repository contains code and tests, not participant recordings. The files available to me also do not include group labels, individual MRI, or digitised electrode positions. Therefore I cannot reconstruct the group comparison, and any later source localisation would have to use a template and remain exploratory.
-
-## Citation and license
-
-Citation information is in [`CITATION.cff`](CITATION.cff). The code is released under the [MIT License](LICENSE).
+- **Implemented:** QC, event reconstruction, reviewed interpolation, filtering, rereferencing, epoching, and dual-format export.
+- **Tested:** synthetic marker and preprocessing contracts in CI.
+- **Evaluated:** complete workflow on 10 private recordings.
+- **Planned:** explicit ICA component decisions, time-frequency summaries, and exploratory template source localization.
+- **Not yet validated:** group analysis, exact original ICA choices, individual source localization, or generalization beyond the evaluated recordings.
