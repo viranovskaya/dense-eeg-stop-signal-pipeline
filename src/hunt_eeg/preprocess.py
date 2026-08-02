@@ -70,6 +70,13 @@ def preprocess_recording(
     export_eeglab: bool = True,
 ) -> dict:
     """Filter, rereference, interpolate persistent bad EEG channels, and epoch."""
+    if (
+        not participant_id
+        or len(participant_id) > 64
+        or not participant_id.isascii()
+        or not participant_id.isalnum()
+    ):
+        raise ValueError("Participant ID must be 1-64 ASCII letters or digits")
     bad_channels = bad_channels or []
     output.mkdir(parents=True, exist_ok=True)
     figures = output / "figures"

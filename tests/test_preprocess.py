@@ -59,6 +59,28 @@ def synthetic_recording() -> mne.io.RawArray:
 
 
 class PreprocessingTests(unittest.TestCase):
+    def test_participant_id_cannot_redirect_output_paths(self):
+        invalid_ids = ["", ".", "..", "../escape", "a/b", "a\\b", "/absolute", "é"]
+        for participant_id in invalid_ids:
+            with self.subTest(participant_id=participant_id):
+                with tempfile.TemporaryDirectory() as directory:
+                    output = Path(directory) / "processed"
+                    with patch(
+                        "hunt_eeg.preprocess._read_brainvision_compat"
+                    ) as reader:
+                        with self.assertRaisesRegex(
+                            ValueError,
+                            "Participant ID must be",
+                        ):
+                            preprocess_recording(
+                                Path("synthetic.vhdr"),
+                                output,
+                                participant_id=participant_id,
+                                export_eeglab=False,
+                            )
+                    reader.assert_not_called()
+                    self.assertFalse(output.exists())
+
     def test_synthetic_recording_runs_through_preprocessing(self):
         raw = synthetic_recording()
         with tempfile.TemporaryDirectory() as directory:
