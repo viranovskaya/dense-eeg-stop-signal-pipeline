@@ -1,0 +1,9 @@
+# Exact dependency snapshot for the synthetic CI suite.
+# This does not claim to reconstruct the historical private 10-recording environment.
+mne==1.12.1
+numpy==2.3.5
+pandas==2.2.3
+scipy==1.18.0
+matplotlib==3.11.0
+h5py==3.16.0
+eeglabio==0.1.3
