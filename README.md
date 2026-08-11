@@ -37,6 +37,9 @@ I implemented:
 - run provenance with input, configuration, source, decision, and output hashes;
 - trial-to-epoch lineage tables that retain classification and drop reasons;
 - low-pass C3/C4 ERP summaries as an initial signal check.
+- a public 127-channel corruption benchmark with known channel-window truth,
+  held-out seeds, BrainVision round-trip checks, and separate detection and
+  signal-preservation measures.
 
 The recovered marker logic is documented in
 [`docs/recovered_protocol.md`](docs/recovered_protocol.md). The scientific scope
@@ -71,6 +74,33 @@ malformed BrainVision dates, temporal integrity limits, epoch lineage,
 provenance, preprocessing order,
 export contracts, and full recording coverage by the temporal QC scan.
 
+## Public synthetic benchmark
+
+[`docs/synthetic_benchmark.md`](docs/synthetic_benchmark.md) describes a fully
+public 127-channel benchmark with EOG, ECG, complete go/stop marker sequences,
+five declared corruption families, and a known C3/C4 task signal. The benchmark
+keeps calibration, seed-level holdout and stress seeds separate and writes an
+exact-set provenance record before publishing a new output directory. The
+holdout uses new random seeds under the same fixed corruption scenario; it is
+not a test of new artifact conditions or external generalization.
+
+Across the three predeclared seed-level holdout recordings, the primary
+temporal screen reached precision, recall and F1 of 1.00 for 13 positive cases
+among 1,135 primary channel-window pairs per recording. The all-temporal set
+contained 1,136 pairs including the separate stress case. The separate raw-PSD
+50 Hz detector also reached F1 1.00. The 100-µV, 0.5-second electrode-pop stress
+case was not detected after dilution inside a 20-second window.
+
+After the declared oracle decisions, the largest C3/C4 peak-amplitude error was
+2.48 µV and the peak-latency error was 0 ms. Across 1,524 channel-band values,
+the 1,464 unaffected values had a median absolute error of 0.012 dB, a 95th
+percentile of 0.092 dB and a maximum of 0.141 dB. Errors were much larger for
+the 24 oracle-interpolated values and the 36 values from other corrupted
+channels. The complete center, upper-tail and maximum statistics are retained
+in the [machine-readable held-out summary](docs/benchmark_results/heldout_seed_summary.json).
+These are controlled synthetic software results, not evidence that unknown EEG
+signals can be reconstructed or estimates of performance on participant data.
+
 ## Reproducibility
 
 [`config/analysis.json`](config/analysis.json) and
@@ -104,6 +134,8 @@ CI installs the declared dependency ranges on Python 3.12, runs the synthetic un
 - Group comparisons cannot be reconstructed without group labels.
 - Individual source localization is out of scope because MRI and digitized geometry are unavailable.
 - The current public fixture is synthetic; an independent public stop-signal example has not yet been integrated.
+- Synthetic benchmark results depend on the declared generator, corruption
+  amplitudes and fixed seeds and do not establish generalization to real EEG.
 - Window-level robust-z flags are conservative review prompts, not validated
   universal thresholds or automatic interpolation decisions. Common-mode
   artifacts may not appear as spatial outliers.
@@ -177,6 +209,7 @@ page, and the code is released under the [MIT License](LICENSE).
 - **Implemented:** executable event definitions, conservative trial reconstruction, reconciliation, reviewed interpolation, filtering, rereferencing, epoching, provenance, and dual-format export.
 - **Tested:** synthetic marker, configuration, provenance, epoch-accounting, and preprocessing contracts in CI.
 - **Evaluated:** controlled methods run on 10 private recordings, with verified participant and dataset provenance.
-- **Next:** add a synthetic corruption benchmark that measures both artifact detection and signal preservation.
-- **Later:** add one public 128-channel stop-signal example and an explicit ICA component-decision table.
+- **Benchmark:** known-truth detection, BrainVision round trip, trial accounting,
+  band-power preservation and C3/C4 task-signal preservation are implemented.
+- **Next:** add one public 128-channel stop-signal example and an explicit ICA component-decision table.
 - **Not validated:** group analysis, exact original ICA choices, source localization, or generalization beyond the evaluated recordings.
