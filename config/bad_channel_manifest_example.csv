@@ -1,0 +1,4 @@
+participant_id,channel,decision,reason,reviewer,reviewed_at,evidence_windows
+001,E42,interpolate,persistent flat trace across inspected windows,reviewer-1,2026-08-11,0-20;120-140;240-260
+001,E55,keep,transient noise limited to one window,reviewer-1,2026-08-11,0-20;120-140;240-260
+002,,none,no persistent bad EEG channels after review,reviewer-1,2026-08-11,0-20;120-140;240-260
