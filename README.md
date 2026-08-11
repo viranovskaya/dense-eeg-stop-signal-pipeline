@@ -168,7 +168,9 @@ metric after the 1--40 Hz filter.
 
 ## Citation
 
-Use [`CITATION.cff`](CITATION.cff). GitHub release `v0.1.0` is available, and the code is released under the [MIT License](LICENSE).
+Use [`CITATION.cff`](CITATION.cff). Versioned archives are available on the
+[GitHub Releases](https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline/releases)
+page, and the code is released under the [MIT License](LICENSE).
 
 ## Current status
 
