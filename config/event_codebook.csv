@@ -1,11 +1,10 @@
-marker,role,trial_class,interpretation,confidence
-S17,stimulus,go,go stimulus variant A,high
-S18,stimulus,go,go stimulus variant B,high
-S6,outcome,go,correct go response,high
-S4,outcome,go,incorrect or too-slow go response,high
-S1,stimulus,stop,stop-trial stimulus variant A,high
-S2,stimulus,stop,stop-trial stimulus variant B,high
-S19,signal,stop,stop signal,high
-S5,outcome,stop,response after stop signal (failed stop),high
-S7,unknown,exclude,rare unresolved or aborted event,low
-
+marker,role,trial_type,classification,inferred_classification,inference_confidence,interpretation,confidence
+S17,trial_start,go,,,,go stimulus variant A,high
+S18,trial_start,go,,,,go stimulus variant B,high
+S6,outcome,go,go_correct,,,correct go response,high
+S4,outcome,go,go_incorrect_or_slow,,,incorrect or too-slow go response,high
+S1,trial_start,stop,,,,stop-trial stimulus variant A,high
+S2,trial_start,stop,,,,stop-trial stimulus variant B,high
+S19,stop_signal,stop,,stop_successful,medium,stop signal,high
+S5,outcome,stop,stop_failed,,,response after stop signal,high
+S7,ambiguous,any,,,,rare unresolved or aborted event,low

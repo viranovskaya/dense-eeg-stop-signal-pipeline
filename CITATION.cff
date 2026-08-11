@@ -8,5 +8,5 @@ authors:
     orcid: "https://orcid.org/0009-0009-3819-9362"
 repository-code: "https://github.com/viranovskaya/dense-eeg-stop-signal-pipeline"
 license: MIT
-version: 0.1.0
-date-released: 2026-07-13
+version: 0.2.0
+date-released: 2026-08-11

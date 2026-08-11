@@ -26,14 +26,26 @@ The preserved EEGLAB history records the following operations:
 11. inspect the first 35 component maps and component time-frequency activity;
 12. save the condition datasets.
 
-The condition-specific files validate the operational definition:
+The preserved condition-specific files for one recording provide the strongest
+direct check of the recovered operational mapping:
 
 - `S6` = correct go response;
 - `S4` = incorrect or too-slow go response;
 - `S5` after `S19` = failed inhibition;
-- `S19` without a following `S5` before the next trial = successful inhibition.
+- `S19` without a following `S5` before the next trial supports an inferred
+  successful-stop label.
 
-Participant-level counts and latency summaries are intentionally omitted from this public repository.
+The remaining recordings provide sequence-level consistency checks, not an
+independent behavioral ground truth for this mapping.
+
+Participant-level counts and marker-onset intervals are intentionally omitted
+from this public repository. The intervals are not described as behavioral
+reaction times because their acquisition meaning has not been independently
+validated.
+
+The current Python workflow is the executable reconstruction. The MATLAB script
+is retained only as a readable historical reference and does not implement the
+current ambiguity states, lineage, or provenance contracts.
 
 ## Reproducibility issues found
 
@@ -41,7 +53,9 @@ Participant-level counts and latency summaries are intentionally omitted from th
 
 After ECG removal, the preserved continuous `.set` contains 128 channels: 127 scalp EEG channels and one `EOG`. All channel `type` fields are empty, and EOG has no spatial coordinates. The recorded call `pop_reref(EEG, [])` contains no exclusion list. Therefore EOG may have been included in the original average reference and ICA.
 
-The reconstructed pipeline fixes this by assigning ECG/EOG channel types before rereferencing and using EEG channels only for average reference and EEG ICA.
+The reconstructed pipeline assigns ECG/EOG channel types before rereferencing
+and uses EEG channels only for the average reference. Any later ICA fit must
+also be restricted to EEG channels and recorded separately.
 
 ### Bad-channel interpolation is not logged
 
@@ -57,4 +71,6 @@ The new pipeline must save an explicit component table containing component numb
 
 ### Source-localization boundary
 
-Only template electrode positions are available. There is no individual MRI or digitized electrode geometry. Beamforming can therefore be implemented only as template-based exploratory analysis, not precise individual localization.
+Only template electrode positions are available. There is no individual MRI or
+digitized electrode geometry. Individual source localization is therefore out
+of scope for this project.

@@ -11,6 +11,18 @@
     "go": [-1.5, 3.0],
     "stop": [-2.0, 2.0]
   },
-  "unknown_events_excluded": ["S7"]
+  "event_integrity_limits_ms": {
+    "stimulus_to_outcome": 5000,
+    "stimulus_to_stop_signal": 5000,
+    "stop_signal_to_outcome": 5000,
+    "trial_interval": 10000
+  },
+  "qc": {
+    "representative_window_count": 5,
+    "representative_window_seconds": 20.0,
+    "full_recording_window_seconds": 20.0,
+    "robust_z_threshold": 5.0,
+    "flat_fraction_threshold": 0.1,
+    "line_noise_ratio_db_threshold": 20.0
+  }
 }
-
