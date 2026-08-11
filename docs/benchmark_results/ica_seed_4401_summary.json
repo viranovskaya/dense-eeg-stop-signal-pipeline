@@ -1,0 +1,95 @@
+{
+  "accounting": {
+    "dropped_epochs": 0,
+    "go_epochs_retained": 17,
+    "markers": 77,
+    "stop_epochs_retained": 17,
+    "trial_starts": 34
+  },
+  "checks": {
+    "auxiliary_correlation": {
+      "ecg": {
+        "channels_compared": 127,
+        "maximum_absolute_correlation_after": 0.049400013629501784,
+        "maximum_absolute_correlation_before": 0.176474526480538,
+        "median_absolute_correlation_after": 0.01228384671881433,
+        "median_absolute_correlation_before": 0.07384490837726275
+      },
+      "eog": {
+        "channels_compared": 127,
+        "maximum_absolute_correlation_after": 0.028169337497671268,
+        "maximum_absolute_correlation_before": 0.2954079273223865,
+        "median_absolute_correlation_after": 0.005530755610301195,
+        "median_absolute_correlation_before": 0.12960970433775826
+      }
+    },
+    "signal_preservation": {
+      "band_power": {
+        "channel_band_values": 508,
+        "maximum_absolute_change_db": 0.9940547086258325,
+        "median_absolute_change_db": 0.08216840367697781,
+        "p95_absolute_change_db": 0.6452354823080523
+      },
+      "task_signal": {
+        "channels": [
+          "C3",
+          "C4"
+        ],
+        "maximum_peak_amplitude_change_uv": 0.2302129212597297,
+        "maximum_peak_latency_change_ms": 0.0
+      }
+    }
+  },
+  "fixture": {
+    "eeg_channels": 127,
+    "kind": "public synthetic integration fixture",
+    "recording_seconds": 180.0,
+    "sampling_frequency_hz": 250.0,
+    "seed": 4401
+  },
+  "ica": {
+    "automatic_exclusion": false,
+    "components": 126,
+    "excluded_components": [
+      2,
+      3
+    ],
+    "fit_iterations": 530,
+    "fit_stopping_rule": "MNE small-angle stopping rule (n_small_angle=20)",
+    "fit_stopping_rule_met": true,
+    "method": "infomax",
+    "selected_component_cues": [
+      {
+        "component": 2,
+        "ecg_correlation": -0.0108173977462674,
+        "eog_correlation": 0.8690954265168103
+      },
+      {
+        "component": 3,
+        "ecg_correlation": 0.7419799189521052,
+        "eog_correlation": 0.0025590456178664
+      }
+    ]
+  },
+  "provenance": {
+    "fixture_provenance_sha256": "f5428a75b506367f8f1e55d1907da323883a1ff4aa5056dfb006693155a747db",
+    "processed_provenance_sha256": "df8d030aa5aeff2b7a5061fdb1af36cf8cfa83c452cb6893ca46cd5da054adea",
+    "review_provenance_sha256": "2cc5dea299b9c58bac8ef134d7935689ba7a5ba7055a50b73697d7f1f3d9cac4",
+    "source_manifest_sha256": "628675817b2b03ce3932800aa6bf559814ee960c0f3583ea1eda3d7c0880b9e5"
+  },
+  "runtime": {
+    "packages": {
+      "eeglabio": "0.1.3",
+      "h5py": "3.16.0",
+      "matplotlib": "3.11.0",
+      "mne": "1.12.1",
+      "numpy": "2.3.5",
+      "pandas": "2.2.3",
+      "pybv": "0.8.1",
+      "scipy": "1.18.0"
+    },
+    "python": "3.13.7"
+  },
+  "schema_version": 1,
+  "scope": "One fixed public synthetic integration fixture. Component decisions were made explicitly after review. Results do not establish automatic artifact classification or generalization to participant EEG."
+}

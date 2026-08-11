@@ -38,6 +38,18 @@ ground truth.
 - The temporal scan uses within-window across-channel robust z scores to find
   local spatial outliers. A flag opens manual review; it does not interpolate
   a channel or reject an epoch automatically.
+- ICA is fitted only to reviewed good EEG channels after the 1--40 Hz filter
+  and EEG-only average reference. EOG and ECG remain available as diagnostic
+  targets during review. Reviewed ICA decisions are applied before bad-channel
+  interpolation and the final average reference.
+- Component correlations are screening cues, not artifact labels. Every
+  component must receive an explicit `keep` or `exclude` decision supported by
+  a topography, time-course, spectrum or auxiliary-channel observation.
+- Existing `BAD_*` annotations are excluded from the ICA fit. Temporal QC
+  windows are not converted into segment exclusions automatically; a private
+  rerun remains gated on an explicit, provenance-bound segment review.
+- The decision table is bound to the exact ICA solution by SHA-256. A partial
+  table, a changed solution or an unreviewed component stops preprocessing.
 
 ## What this project can show
 

@@ -8,7 +8,6 @@ import os
 import sys
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
 os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / ".cache" / "matplotlib"))
@@ -19,6 +18,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from hunt_eeg.decisions import load_bad_channel_manifest
 from hunt_eeg.preprocess import preprocess_recording
 
 
@@ -34,14 +34,45 @@ def main() -> None:
         default="",
         help="Comma-separated persistent bad EEG channels to interpolate",
     )
+    parser.add_argument(
+        "--bad-channel-manifest",
+        type=Path,
+        help="Completed channel-review table; required when ICA is applied",
+    )
     parser.add_argument("--no-eeglab-export", action="store_true")
+    parser.add_argument(
+        "--ica-solution",
+        type=Path,
+        help="Reviewed ICA solution created by run_ica_review.py",
+    )
+    parser.add_argument(
+        "--ica-decisions",
+        type=Path,
+        help="Completed keep/exclude table bound to the ICA solution",
+    )
     args = parser.parse_args()
     bads = [item.strip() for item in args.bad_channels.split(",") if item.strip()]
+    if bads and args.bad_channel_manifest:
+        parser.error("Use either --bad-channels or --bad-channel-manifest")
+    if (args.ica_solution or args.ica_decisions) and not args.bad_channel_manifest:
+        parser.error("ICA application requires --bad-channel-manifest")
+    if args.bad_channel_manifest:
+        manifest = load_bad_channel_manifest(args.bad_channel_manifest)
+        bad_channel_decisions = manifest.loc[
+            manifest["participant_id"] == args.participant_id
+        ].to_dict("records")
+        if not bad_channel_decisions:
+            parser.error("No bad-channel review found for this participant")
+    else:
+        bad_channel_decisions = None
     summary = preprocess_recording(
         args.vhdr,
         args.output,
         participant_id=args.participant_id,
         bad_channels=bads,
+        bad_channel_decisions=bad_channel_decisions,
+        ica_solution_path=args.ica_solution,
+        ica_decision_path=args.ica_decisions,
         export_eeglab=not args.no_eeglab_export,
     )
     print(f"Preprocessing complete: {args.output.resolve()}")
@@ -50,4 +81,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
