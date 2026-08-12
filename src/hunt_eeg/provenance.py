@@ -26,7 +26,8 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _canonical_sha256(payload: dict) -> str:
+def canonical_sha256(payload: dict) -> str:
+    """Return the SHA-256 of a canonical JSON representation."""
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
@@ -107,12 +108,22 @@ def source_manifest() -> dict:
         }
         for path in paths
     ]
-    return {"files": files, "sha256": _canonical_sha256({"files": files})}
+    return {"files": files, "sha256": canonical_sha256({"files": files})}
 
 
-def _package_versions() -> dict[str, str]:
+def package_versions() -> dict[str, str]:
+    """Return versions of packages that can change numerical outputs."""
     versions = {}
-    for package in ("mne", "numpy", "pandas", "scipy", "matplotlib", "h5py", "eeglabio"):
+    for package in (
+        "mne",
+        "numpy",
+        "pandas",
+        "scipy",
+        "matplotlib",
+        "h5py",
+        "eeglabio",
+        "pybv",
+    ):
         try:
             versions[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -187,17 +198,14 @@ def build_provenance_core(
                     "evidence_windows",
                 )
             )
-            and (
-                decision.get("decision") == "none"
-                or bool(decision.get("channel"))
-            )
+            and (decision.get("decision") == "none" or bool(decision.get("channel")))
             for decision in normalized_decisions
         ),
         "software": {
             "git_revision": git_state["revision"],
             "git_dirty": git_state["dirty"],
             "python": platform.python_version(),
-            "packages": _package_versions(),
+            "packages": package_versions(),
             "source_manifest": source_manifest(),
         },
         "GeneratedBy": [
@@ -212,7 +220,7 @@ def build_provenance_core(
             }
         ],
     }
-    payload["core_sha256"] = _canonical_sha256(payload)
+    payload["core_sha256"] = canonical_sha256(payload)
     return payload
 
 
@@ -221,9 +229,7 @@ def write_provenance(output: Path, core: dict) -> Path:
     output = Path(output).resolve()
     provenance_path = output / "provenance.json"
     files = [
-        path
-        for path in output.rglob("*")
-        if path.is_file() and path != provenance_path
+        path for path in output.rglob("*") if path.is_file() and path != provenance_path
     ]
     payload = {
         **core,
@@ -261,7 +267,7 @@ def verify_provenance(output: Path) -> dict:
         for key, value in payload.items()
         if key not in {"core_sha256", "outputs"}
     }
-    if _canonical_sha256(core) != payload.get("core_sha256"):
+    if canonical_sha256(core) != payload.get("core_sha256"):
         raise ValueError(f"Provenance core hash mismatch in {path}")
     records = payload.get("outputs", [])
     declared_paths: list[str] = []
@@ -279,9 +285,7 @@ def verify_provenance(output: Path) -> dict:
             or candidate.stat().st_size != record["size_bytes"]
             or sha256_file(candidate) != record["sha256"]
         ):
-            raise ValueError(
-                f"Provenance output mismatch: {record['path']}"
-            )
+            raise ValueError(f"Provenance output mismatch: {record['path']}")
     if len(declared_paths) != len(set(declared_paths)):
         raise ValueError("Provenance contains duplicate output paths")
     actual_paths = {

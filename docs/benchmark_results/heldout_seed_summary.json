@@ -1,0 +1,79 @@
+{
+  "analysis_config_sha256": "413fb708bdfc324f6e79078d7a7083ac7b89f9cb1555f2ab30427b9c274ac4f3",
+  "benchmark_config_sha256": "ffecdd25e277ad125a65f064e40b339bf7bf11b5a77e8547db736d1f8f791ffc",
+  "evaluation_units_per_recording": {
+    "primary_channel_windows": 1135,
+    "primary_positive_channel_windows": 13,
+    "stress_positive_channel_windows": 1,
+    "temporal_channel_windows": 1136
+  },
+  "holdout_scope": "Reserved random seeds under the same fixed synthetic channels, intervals, amplitudes and corruption families.",
+  "line_noise_detection": {
+    "f1": 1.0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "recordings": 3,
+  "runtime": {
+    "dependency_file_sha256": {
+      "constraints-ci.txt": "2b52e8a45a57711513cdd1fb66569b0321693f066595a4f77881d984fe965cbe",
+      "requirements.txt": "2e7f6b737663b9cd0984bbe0b11c96dbce7f9434a20ee8b995670193f69f4b63"
+    },
+    "packages": {
+      "eeglabio": "0.1.3",
+      "h5py": "3.16.0",
+      "matplotlib": "3.11.0",
+      "mne": "1.12.1",
+      "numpy": "2.3.5",
+      "pandas": "2.2.3",
+      "pybv": "0.8.1",
+      "scipy": "1.18.0"
+    },
+    "platform": "macOS-26.6-arm64-arm-64bit-Mach-O",
+    "python": "3.13.7"
+  },
+  "schema_version": "1",
+  "seed_group": "held_out",
+  "signal_preservation": {
+    "band_power_absolute_error_db": {
+      "all_channel_band_values": {
+        "maximum_absolute_error_db": 23.774316850894763,
+        "median_absolute_error_db": 0.013356108976722873,
+        "p95_absolute_error_db": 0.1003052631065276,
+        "values": 1524
+      },
+      "non_oracle_corrupted": {
+        "maximum_absolute_error_db": 23.774316850894763,
+        "median_absolute_error_db": 0.058185529057303065,
+        "p95_absolute_error_db": 23.29304591896593,
+        "values": 36
+      },
+      "oracle_interpolated": {
+        "maximum_absolute_error_db": 16.79767755238823,
+        "median_absolute_error_db": 6.449938450107913,
+        "p95_absolute_error_db": 12.750771321293634,
+        "values": 24
+      },
+      "unaffected": {
+        "maximum_absolute_error_db": 0.1405555438701308,
+        "median_absolute_error_db": 0.012311331540382773,
+        "p95_absolute_error_db": 0.09183949668202127,
+        "values": 1464
+      }
+    },
+    "maximum_amplitude_error_uv": 2.4760088951576984,
+    "maximum_latency_error_ms": 0.0
+  },
+  "source_manifest_sha256": "aa7f50a06fec5ba89faf3bcbac1b13e0461aba9fe8dac86289e20da662e51979",
+  "temporal_detection": {
+    "f1": 0.9629629629629631,
+    "precision": 1.0,
+    "recall": 0.9285714285714285
+  },
+  "temporal_primary_detection": {
+    "f1": 1.0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "temporal_stress_detection_rate": 0.0
+}

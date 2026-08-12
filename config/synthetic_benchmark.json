@@ -1,0 +1,53 @@
+{
+  "sampling_frequency_hz": 250.0,
+  "duration_seconds": 180.0,
+  "eeg_channel_count": 127,
+  "window_seconds": 20.0,
+  "random_seeds": {
+    "calibration": [1101, 1102, 1103],
+    "held_out": [2201, 2202, 2203],
+    "stress": [3301, 3302]
+  },
+  "corruptions": [
+    {
+      "family": "persistent_noise",
+      "benchmark_role": "primary",
+      "channel_rank": 5,
+      "start_seconds": 0.0,
+      "stop_seconds": 180.0,
+      "amplitude_uv": 80.0
+    },
+    {
+      "family": "intermittent_burst",
+      "benchmark_role": "primary",
+      "channel_rank": 19,
+      "start_seconds": 66.0,
+      "stop_seconds": 74.0,
+      "amplitude_uv": 300.0
+    },
+    {
+      "family": "electrode_pop",
+      "benchmark_role": "stress",
+      "channel_rank": 43,
+      "start_seconds": 110.3,
+      "stop_seconds": 110.8,
+      "amplitude_uv": 100.0
+    },
+    {
+      "family": "flat_segment",
+      "benchmark_role": "primary",
+      "channel_rank": 67,
+      "start_seconds": 130.0,
+      "stop_seconds": 170.0,
+      "amplitude_uv": 0.0
+    },
+    {
+      "family": "line_noise",
+      "benchmark_role": "primary",
+      "channel_rank": 91,
+      "start_seconds": 20.0,
+      "stop_seconds": 160.0,
+      "amplitude_uv": 45.0
+    }
+  ]
+}
