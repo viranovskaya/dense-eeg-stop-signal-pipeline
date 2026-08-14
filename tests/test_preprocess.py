@@ -17,7 +17,6 @@ import mne
 import numpy as np
 import pandas as pd
 
-
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from hunt_eeg.preprocess import _event_array, preprocess_recording
@@ -31,8 +30,8 @@ def synthetic_recording() -> mne.io.RawArray:
     rng = np.random.default_rng(20260713)
     data = []
     for index, _ in enumerate(channels):
-        signal = (1.0 + 0.1 * index) * 1e-6 * np.sin(
-            2 * np.pi * (6 + index % 3) * times
+        signal = (
+            (1.0 + 0.1 * index) * 1e-6 * np.sin(2 * np.pi * (6 + index % 3) * times)
         )
         data.append(signal + rng.normal(scale=0.2e-6, size=len(times)))
 
@@ -146,69 +145,157 @@ class PreprocessingTests(unittest.TestCase):
     def test_participant_id_cannot_redirect_output_paths(self):
         invalid_ids = ["", ".", "..", "../escape", "a/b", "a\\b", "/absolute", "é"]
         for participant_id in invalid_ids:
-            with self.subTest(participant_id=participant_id):
-                with tempfile.TemporaryDirectory() as directory:
-                    output = Path(directory) / "processed"
-                    with patch(
-                        "hunt_eeg.preprocess._read_brainvision_compat"
-                    ) as reader:
-                        with self.assertRaisesRegex(
-                            ValueError,
-                            "Participant ID must be",
-                        ):
-                            preprocess_recording(
-                                Path("synthetic.vhdr"),
-                                output,
-                                participant_id=participant_id,
-                                export_eeglab=False,
-                            )
-                    reader.assert_not_called()
-                    self.assertFalse(output.exists())
+            with (
+                self.subTest(participant_id=participant_id),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                output = Path(directory) / "processed"
+                with (
+                    patch("hunt_eeg.preprocess._read_brainvision_compat") as reader,
+                    self.assertRaisesRegex(
+                        ValueError,
+                        "Participant ID must be",
+                    ),
+                ):
+                    preprocess_recording(
+                        Path("synthetic.vhdr"),
+                        output,
+                        participant_id=participant_id,
+                        export_eeglab=False,
+                    )
+                reader.assert_not_called()
+                self.assertFalse(output.exists())
 
     def test_failed_run_leaves_no_partial_output(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             header = brainvision_stub(root)
             output = root / "processed"
-            with patch(
-                "hunt_eeg.preprocess._read_brainvision_compat",
-                side_effect=RuntimeError("reader failed"),
+            with (
+                patch(
+                    "hunt_eeg.preprocess._read_brainvision_compat",
+                    side_effect=RuntimeError("reader failed"),
+                ),
+                self.assertRaisesRegex(RuntimeError, "reader failed"),
             ):
-                with self.assertRaisesRegex(RuntimeError, "reader failed"):
-                    preprocess_recording(
-                        header,
-                        output,
-                        participant_id="test",
-                        export_eeglab=False,
-                    )
+                preprocess_recording(
+                    header,
+                    output,
+                    participant_id="test",
+                    export_eeglab=False,
+                )
             self.assertFalse(output.exists())
             self.assertEqual(list(root.glob(".processed.tmp-*")), [])
+
+    def test_ica_solution_and_decisions_are_required_together(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "processed"
+            solution = root / "ica_solution.fif"
+            solution.write_bytes(b"solution")
+
+            with self.assertRaisesRegex(ValueError, "provided together"):
+                preprocess_recording(
+                    root / "unused.vhdr",
+                    output,
+                    participant_id="test",
+                    ica_solution_path=solution,
+                    export_eeglab=False,
+                )
+
+            self.assertFalse(output.exists())
+
+    def test_reviewed_ica_runs_before_ecg_drop_and_interpolation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = brainvision_stub(root)
+            output = root / "processed"
+            solution = root / "ica_solution.fif"
+            solution.write_bytes(b"solution")
+            (root / "provenance.json").write_text("{}\n", encoding="utf-8")
+            decisions = root / "ica_decisions.csv"
+            decisions.write_text("reviewed decisions\n", encoding="utf-8")
+            bad_channel_decisions = [
+                {
+                    "channel": "Fp2",
+                    "decision": "interpolate",
+                    "reason": "persistent artifact",
+                    "reviewer": "reviewer",
+                    "reviewed_at": "2026-08-12",
+                    "evidence_windows": "0-20",
+                }
+            ]
+
+            def apply_ica(raw, **kwargs):
+                self.assertIn("ECG", raw.ch_names)
+                self.assertIn("Fp2", raw.info["bads"])
+                self.assertEqual(kwargs["participant_id"], "test")
+                return raw.copy(), {
+                    "status": "applied reviewed decisions",
+                    "excluded_components": [1],
+                    "decision_record_complete": True,
+                    "automatic_exclusion": False,
+                }
+
+            with (
+                patch(
+                    "hunt_eeg.preprocess._read_brainvision_compat",
+                    return_value=synthetic_recording(),
+                ),
+                patch(
+                    "hunt_eeg.preprocess.apply_reviewed_ica",
+                    side_effect=apply_ica,
+                ),
+            ):
+                summary = preprocess_recording(
+                    header,
+                    output,
+                    participant_id="test",
+                    bad_channel_decisions=bad_channel_decisions,
+                    ica_solution_path=solution,
+                    ica_decision_path=decisions,
+                    export_eeglab=False,
+                )
+
+            continuous = mne.io.read_raw_fif(
+                output / "sub-test_continuous_1-40Hz_avgref_raw.fif",
+                preload=False,
+                verbose="ERROR",
+            )
+
+        self.assertEqual(summary["ica"]["excluded_components"], [1])
+        self.assertNotIn("ECG", continuous.ch_names)
+        self.assertEqual(summary["interpolated_bad_channels"], ["Fp2"])
 
     def test_keep_decision_channel_must_exist(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             header = brainvision_stub(root)
             output = root / "processed"
-            decisions = [{
-                "channel": "TYPO",
-                "decision": "keep",
-                "reason": "reviewed",
-                "reviewer": "reviewer",
-                "reviewed_at": "2026-08-11",
-                "evidence_windows": "0-10 s",
-            }]
-            with patch(
-                "hunt_eeg.preprocess._read_brainvision_compat",
-                return_value=synthetic_recording(),
+            decisions = [
+                {
+                    "channel": "TYPO",
+                    "decision": "keep",
+                    "reason": "reviewed",
+                    "reviewer": "reviewer",
+                    "reviewed_at": "2026-08-11",
+                    "evidence_windows": "0-10 s",
+                }
+            ]
+            with (
+                patch(
+                    "hunt_eeg.preprocess._read_brainvision_compat",
+                    return_value=synthetic_recording(),
+                ),
+                self.assertRaisesRegex(ValueError, "not present"),
             ):
-                with self.assertRaisesRegex(ValueError, "not present"):
-                    preprocess_recording(
-                        header,
-                        output,
-                        participant_id="test",
-                        bad_channel_decisions=decisions,
-                        export_eeglab=False,
-                    )
+                preprocess_recording(
+                    header,
+                    output,
+                    participant_id="test",
+                    bad_channel_decisions=decisions,
+                    export_eeglab=False,
+                )
             self.assertFalse(output.exists())
 
     def test_synthetic_recording_runs_through_preprocessing(self):
@@ -286,9 +373,9 @@ class PreprocessingTests(unittest.TestCase):
                 (output / "provenance.json").read_text(encoding="utf-8")
             )
             self.assertNotIn(str(Path(directory)), json.dumps(provenance))
-            self.assertNotIn("provenance.json", {
-                item["path"] for item in provenance["outputs"]
-            })
+            self.assertNotIn(
+                "provenance.json", {item["path"] for item in provenance["outputs"]}
+            )
             self.assertEqual(len(provenance["core_sha256"]), 64)
 
     def test_bad_annotations_are_preserved_for_epoch_rejection(self):

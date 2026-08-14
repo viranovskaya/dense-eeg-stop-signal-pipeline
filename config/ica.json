@@ -1,0 +1,12 @@
+{
+  "method": "infomax",
+  "fit_params": {
+    "extended": true,
+    "n_small_angle": 20,
+    "w_change": 0.0
+  },
+  "random_state": 97,
+  "max_iter": 1000,
+  "fit_sampling_hz": 100.0,
+  "correlation_review_threshold": 0.3
+}

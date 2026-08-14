@@ -21,8 +21,11 @@ from .events import (
     normalize_marker,
     reconcile_trials,
 )
+from .ica import apply_reviewed_ica
 from .provenance import (
     build_provenance_core,
+    canonical_sha256,
+    sha256_file,
     verify_input_sources,
     write_provenance,
 )
@@ -39,7 +42,9 @@ def _event_array(raw: mne.io.BaseRaw, trials, onset_column: str, classes: list[s
         onset = getattr(trial, onset_column)
         if onset is None or not np.isfinite(onset):
             continue
-        sample = int(raw.time_as_index(float(onset), use_rounding=True)[0] + raw.first_samp)
+        sample = int(
+            raw.time_as_index(float(onset), use_rounding=True)[0] + raw.first_samp
+        )
         rows.append([sample, 0, event_id[trial.trial_class]])
         metadata.append(
             {
@@ -91,7 +96,9 @@ def _epoch_accounting(
             "Epoch accounting failed: "
             f"{proposed} proposed, {retained} retained, {dropped_rows} dropped"
         )
-    retained_sources = {int(source): index for index, source in enumerate(epochs.selection)}
+    retained_sources = {
+        int(source): index for index, source in enumerate(epochs.selection)
+    }
     lineage = metadata.copy()
     lineage["proposed_event_index"] = np.arange(proposed)
     lineage["retained"] = [index in retained_sources for index in range(proposed)]
@@ -189,6 +196,8 @@ def _preprocess_recording_into(
     participant_id: str,
     bad_channels: list[str] | None = None,
     bad_channel_decisions: list[dict] | None = None,
+    ica_solution_path: Path | None = None,
+    ica_decision_path: Path | None = None,
     export_eeglab: bool = True,
 ) -> dict:
     """Filter, rereference, interpolate persistent bad EEG channels, and epoch."""
@@ -202,9 +211,21 @@ def _preprocess_recording_into(
     ):
         raise ValueError("Participant ID must be 1-64 ASCII letters or digits")
     if bad_channels and bad_channel_decisions:
-        raise ValueError(
-            "Pass either bad_channels or bad_channel_decisions, not both"
-        )
+        raise ValueError("Pass either bad_channels or bad_channel_decisions, not both")
+    if (ica_solution_path is None) != (ica_decision_path is None):
+        raise ValueError("ICA solution and decision table must be provided together")
+    if ica_solution_path is not None:
+        ica_solution_path = Path(ica_solution_path).expanduser().resolve()
+        ica_decision_path = Path(ica_decision_path).expanduser().resolve()
+        ica_input_hashes = {
+            "solution_sha256": sha256_file(ica_solution_path),
+            "review_provenance_sha256": sha256_file(
+                ica_solution_path.parent / "provenance.json"
+            ),
+            "decision_table_sha256": sha256_file(ica_decision_path),
+        }
+    else:
+        ica_input_hashes = None
     if bad_channel_decisions is not None:
         bad_channels = sorted(
             {
@@ -238,6 +259,15 @@ def _preprocess_recording_into(
         analysis=analysis,
         bad_channel_decisions=bad_channel_decisions,
     )
+    if ica_input_hashes is not None:
+        core = {
+            key: value for key, value in provenance_core.items() if key != "core_sha256"
+        }
+        core["ica_inputs"] = {
+            **ica_input_hashes,
+            "automatic_exclusion": False,
+        }
+        provenance_core = {**core, "core_sha256": canonical_sha256(core)}
 
     raw = _read_brainvision_compat(vhdr)
     type_updates = {
@@ -255,8 +285,6 @@ def _preprocess_recording_into(
     markers = annotations_to_markers(raw.annotations)
     trials = classify_trials(markers, codebook=codebook)
     reconciliation = reconcile_trials(markers, trials, codebook=codebook)
-    if "ECG" in raw.ch_names:
-        raw.drop_channels(["ECG"])
     decision_channels = {
         str(decision.get("channel", ""))
         for decision in bad_channel_decisions
@@ -277,8 +305,7 @@ def _preprocess_recording_into(
     nyquist = float(raw.info["sfreq"]) / 2
     if high_hz >= nyquist:
         raise ValueError(
-            f"Filter high cutoff {high_hz:g} Hz must be below Nyquist "
-            f"({nyquist:g} Hz)"
+            f"Filter high cutoff {high_hz:g} Hz must be below Nyquist ({nyquist:g} Hz)"
         )
     raw.filter(
         low_hz,
@@ -294,6 +321,28 @@ def _preprocess_recording_into(
     raw.info["bads"] = list(bad_channels)
     # Marked bads are excluded from the reference estimate.
     raw.set_eeg_reference("average", projection=False, verbose="ERROR")
+    if ica_solution_path is not None:
+        raw, ica_summary = apply_reviewed_ica(
+            raw,
+            participant_id=participant_id,
+            solution_path=ica_solution_path,
+            decision_path=ica_decision_path,
+            expected_context={
+                "inputs": provenance_core["inputs"],
+                "analysis_sha256": provenance_core["configuration"]["analysis_sha256"],
+                "bad_channel_decisions": provenance_core["bad_channel_decisions"],
+                "source_manifest_sha256": provenance_core["software"][
+                    "source_manifest"
+                ]["sha256"],
+            },
+        )
+    else:
+        ica_summary = {
+            "status": "not applied",
+            "automatic_exclusion": False,
+        }
+    if "ECG" in raw.ch_names:
+        raw.drop_channels(["ECG"])
     if bad_channels:
         raw.interpolate_bads(reset_bads=True, method={"eeg": "spline"}, verbose="ERROR")
         # Restore a true common-average reference after interpolation.
@@ -433,7 +482,9 @@ def _preprocess_recording_into(
             "decision_record_complete"
         ],
         "continuous_channels": len(raw.ch_names),
-        "go_epochs": {condition: len(go_epochs[condition]) for condition in go_event_id},
+        "go_epochs": {
+            condition: len(go_epochs[condition]) for condition in go_event_id
+        },
         "stop_epochs": {
             condition: len(stop_epochs[condition]) for condition in stop_event_id
         },
@@ -448,13 +499,25 @@ def _preprocess_recording_into(
                 "or proof of artifact removal"
             ),
         },
-        "ica_status": "not fitted yet; component decisions must be explicit",
+        "ica": ica_summary,
     }
     (output / "preprocessing_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     trials.to_csv(output / "reconstructed_trials.csv", index=False)
     verify_input_sources(vhdr, provenance_core["inputs"])
+    if (
+        ica_input_hashes is not None
+        and {
+            "solution_sha256": sha256_file(ica_solution_path),
+            "review_provenance_sha256": sha256_file(
+                ica_solution_path.parent / "provenance.json"
+            ),
+            "decision_table_sha256": sha256_file(ica_decision_path),
+        }
+        != ica_input_hashes
+    ):
+        raise ValueError("ICA solution or decision table changed during the run")
     write_provenance(output, provenance_core)
     return summary
 
@@ -465,6 +528,8 @@ def preprocess_recording(
     participant_id: str,
     bad_channels: list[str] | None = None,
     bad_channel_decisions: list[dict] | None = None,
+    ica_solution_path: Path | None = None,
+    ica_decision_path: Path | None = None,
     export_eeglab: bool = True,
 ) -> dict:
     """Create one recording output atomically in a new directory."""
@@ -474,9 +539,7 @@ def preprocess_recording(
             "Auditable preprocessing requires a new output path; reuse is disabled"
         )
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = Path(
-        tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent)
-    )
+    temporary = Path(tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent))
     temporary.rmdir()
     try:
         summary = _preprocess_recording_into(
@@ -485,6 +548,8 @@ def preprocess_recording(
             participant_id=participant_id,
             bad_channels=bad_channels,
             bad_channel_decisions=bad_channel_decisions,
+            ica_solution_path=ica_solution_path,
+            ica_decision_path=ica_decision_path,
             export_eeglab=export_eeglab,
         )
         temporary.replace(output)

@@ -13,7 +13,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault("MNE_DONTWRITE_HOME", "true")
 os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / ".cache" / "matplotlib"))
@@ -41,12 +40,28 @@ def participant_id(path: Path) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Preprocess all BrainVision recordings.")
+    parser = argparse.ArgumentParser(
+        description="Preprocess all BrainVision recordings."
+    )
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--bad-channel-manifest", type=Path, required=True)
     parser.add_argument("--no-eeglab-export", action="store_true")
+    parser.add_argument(
+        "--ica-review-root",
+        type=Path,
+        help="Directory containing sub-<participant>/ica_solution.fif packages",
+    )
+    parser.add_argument(
+        "--ica-decision-manifest",
+        type=Path,
+        help="Completed component decisions for every participant",
+    )
     args = parser.parse_args()
+    if (args.ica_review_root is None) != (args.ica_decision_manifest is None):
+        parser.error(
+            "--ica-review-root and --ica-decision-manifest must be used together"
+        )
 
     manifest_path = args.bad_channel_manifest.expanduser().resolve()
     initial_manifest_sha256 = sha256_file(manifest_path)
@@ -71,6 +86,33 @@ def main() -> None:
             "The bad-channel manifest must match the input participants exactly; "
             f"missing reviews={missing_reviews}, extra reviews={extra_reviews}"
         )
+    if args.ica_review_root is not None:
+        ica_review_root = args.ica_review_root.expanduser().resolve()
+        ica_decision_manifest = args.ica_decision_manifest.expanduser().resolve()
+        initial_ica_decision_sha256 = sha256_file(ica_decision_manifest)
+        ica_solutions = {
+            participant: (ica_review_root / f"sub-{participant}" / "ica_solution.fif")
+            for participant in participants
+        }
+        missing_ica = sorted(
+            participant
+            for participant, path in ica_solutions.items()
+            if not path.is_file()
+        )
+        if missing_ica:
+            raise SystemExit(
+                "ICA review packages are missing for participants: "
+                + ", ".join(missing_ica)
+            )
+        initial_ica_solution_hashes = {
+            participant: sha256_file(path)
+            for participant, path in sorted(ica_solutions.items())
+        }
+    else:
+        ica_decision_manifest = None
+        ica_solutions = {}
+        initial_ica_decision_sha256 = None
+        initial_ica_solution_hashes = {}
     requested_output = args.output.expanduser().resolve()
     if requested_output.exists():
         raise SystemExit(
@@ -107,6 +149,8 @@ def main() -> None:
             participant_output,
             participant_id=participant,
             bad_channel_decisions=decisions,
+            ica_solution_path=ica_solutions.get(participant),
+            ica_decision_path=ica_decision_manifest,
             export_eeglab=not args.no_eeglab_export,
         )
         summaries[participant] = summary
@@ -115,12 +159,8 @@ def main() -> None:
         stop_accounting = summary["stop_epoch_accounting"]
         row = {
             "participant_id": participant,
-            "decision_record_complete": summary[
-                "bad_channel_decision_record_complete"
-            ],
-            "interpolated_channel_count": len(
-                summary["interpolated_bad_channels"]
-            ),
+            "decision_record_complete": summary["bad_channel_decision_record_complete"],
+            "interpolated_channel_count": len(summary["interpolated_bad_channels"]),
             "detected_trial_starts": reconciliation["detected_trial_starts"],
             "go_events_proposed": go_accounting["proposed_events"],
             "go_epochs_retained": go_accounting["retained_epochs"],
@@ -133,6 +173,10 @@ def main() -> None:
             ),
             "after_candidate_bad_count": len(
                 summary["before_after_qc"]["after"]["candidate_bad_channels"]
+            ),
+            "ica_status": summary["ica"]["status"],
+            "ica_excluded_component_count": len(
+                summary["ica"].get("excluded_components", [])
             ),
         }
         for stage in ("before", "after"):
@@ -190,12 +234,14 @@ def main() -> None:
 
     report = f"""# Dataset preprocessing report
 
-- Recordings: {aggregate['recordings']}
-- Trial starts accounted for: {aggregate['detected_trial_starts_total']}
-- Interpolated channels: {aggregate['interpolated_channels_total']}
-- Complete decision records: {aggregate['all_decision_records_complete']}
-- Go epochs: {aggregate['epochs']['go']['retained']} retained / {aggregate['epochs']['go']['proposed']} proposed
-- Stop epochs: {aggregate['epochs']['stop']['retained']} retained / {aggregate['epochs']['stop']['proposed']} proposed
+- Recordings: {aggregate["recordings"]}
+- Trial starts accounted for: {aggregate["detected_trial_starts_total"]}
+- Interpolated channels: {aggregate["interpolated_channels_total"]}
+- Complete decision records: {aggregate["all_decision_records_complete"]}
+- ICA applied: {int(table["ica_status"].eq("applied reviewed decisions").sum())} / {len(table)} recordings
+- ICA components excluded: {int(table["ica_excluded_component_count"].sum())}
+- Go epochs: {aggregate["epochs"]["go"]["retained"]} retained / {aggregate["epochs"]["go"]["proposed"]} proposed
+- Stop epochs: {aggregate["epochs"]["stop"]["retained"]} retained / {aggregate["epochs"]["stop"]["proposed"]} proposed
 
 ![Dataset before/after QC](dataset_before_after_qc.png)
 
@@ -211,7 +257,10 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
     for participant in sorted(summaries):
         path = output / f"sub-{participant}" / "provenance.json"
         payload = verify_provenance(output / f"sub-{participant}")
-        if payload["software"]["source_manifest"]["sha256"] != initial_source_manifest["sha256"]:
+        if (
+            payload["software"]["source_manifest"]["sha256"]
+            != initial_source_manifest["sha256"]
+        ):
             raise RuntimeError(
                 f"Source changed during dataset run before sub-{participant}"
             )
@@ -224,13 +273,19 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
         )
     dataset_provenance_path = output / "dataset_provenance.json"
     top_level_files = sorted(
-        path for path in output.iterdir()
+        path
+        for path in output.iterdir()
         if path.is_file() and path != dataset_provenance_path
     )
     dataset_provenance = {
         "schema_version": "1",
         "source_manifest": initial_source_manifest,
         "bad_channel_manifest_sha256": initial_manifest_sha256,
+        "ica": {
+            "decision_manifest_sha256": initial_ica_decision_sha256,
+            "solution_sha256_by_participant": initial_ica_solution_hashes,
+            "automatic_exclusion": False,
+        },
         "participants": participant_records,
         "outputs": [
             {
@@ -250,6 +305,15 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
         raise RuntimeError("Bad-channel manifest changed during dataset run")
     if source_manifest()["sha256"] != initial_source_manifest["sha256"]:
         raise RuntimeError("Executable source changed during dataset run")
+    if ica_decision_manifest is not None:
+        if sha256_file(ica_decision_manifest) != initial_ica_decision_sha256:
+            raise RuntimeError("ICA decision manifest changed during dataset run")
+        final_ica_solution_hashes = {
+            participant: sha256_file(path)
+            for participant, path in sorted(ica_solutions.items())
+        }
+        if final_ica_solution_hashes != initial_ica_solution_hashes:
+            raise RuntimeError("ICA solution changed during dataset run")
     output.replace(requested_output)
     atexit.unregister(cleanup)
     print(f"Dataset preprocessing complete: {requested_output}")

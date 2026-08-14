@@ -31,12 +31,14 @@ I implemented:
   codebook into each trial row; these are not calibrated probabilities;
 - trial and epoch accounting that keeps every detected trial start visible;
 - explicit reviewed bad-channel manifests before EEG interpolation;
+- rank-aware extended Infomax ICA with a separate private review package;
+- a solution-bound `keep` or `exclude` decision for every ICA component;
 - 1--40 Hz filtering and EEG-only average reference;
 - continuous, go-locked, and stop-locked FIF and EEGLAB exports;
 - targeted before/after screening metrics;
 - run provenance with input, configuration, source, decision, and output hashes;
 - trial-to-epoch lineage tables that retain classification and drop reasons;
-- low-pass C3/C4 ERP summaries as an initial signal check.
+- low-pass C3/C4 ERP summaries as an initial signal check;
 - a public 127-channel corruption benchmark with known channel-window truth,
   held-out seeds, BrainVision round-trip checks, and separate detection and
   signal-preservation measures.
@@ -44,6 +46,10 @@ I implemented:
 The recovered marker logic is documented in
 [`docs/recovered_protocol.md`](docs/recovered_protocol.md). The scientific scope
 and evidence boundary are in [`docs/methods_scope.md`](docs/methods_scope.md).
+The component-review order and decision contract are described in
+[`docs/ica_workflow.md`](docs/ica_workflow.md).
+The public ICA integration check is reported in
+[`docs/ica_validation.md`](docs/ica_validation.md).
 
 ## Data and sample
 
@@ -101,6 +107,29 @@ in the [machine-readable held-out summary](docs/benchmark_results/heldout_seed_s
 These are controlled synthetic software results, not evidence that unknown EEG
 signals can be reconstructed or estimates of performance on participant data.
 
+## Public ICA integration check
+
+The explicit ICA workflow was also run end to end on one deterministic public
+synthetic fixture: 127 EEG channels plus EOG and ECG, 180 seconds at 250 Hz.
+Extended Infomax met the MNE small-angle stopping rule (`n_small_angle=20`)
+after 530 iterations and estimated 126 components. Review identified one ocular
+and one cardiac component; all 126 components then received an explicit
+decision, and only those two were excluded.
+
+Across the 127 EEG channels, the maximum absolute EOG correlation fell from
+0.295 to 0.028 and the maximum absolute ECG correlation from 0.176 to 0.049.
+The largest C3/C4 task-peak change was 0.23 µV with no peak-latency shift. The
+median absolute change across 508 channel-band values was 0.082 dB; the 95th
+percentile was 0.645 dB and the maximum was 0.994 dB. All 34 reconstructed
+trial starts were accounted for, with 17 go and 17 stop epochs retained and no
+epoch drops.
+
+This is an integration check on one fixed synthetic recording. It shows that
+the review, decision-binding, application and reporting path works as intended;
+it does not validate automatic component classification or performance on
+participant EEG. Exact values and environment versions are in the
+[machine-readable summary](docs/benchmark_results/ica_seed_4401_summary.json).
+
 ## Reproducibility
 
 [`config/analysis.json`](config/analysis.json) and
@@ -130,7 +159,8 @@ CI installs the declared dependency ranges on Python 3.12, runs the synthetic un
 ## Limitations
 
 - Exact original bad-channel and ICA-rejection decisions cannot be recovered from the preserved history.
-- ICA fitting and an explicit component-decision table are not yet implemented as completed results.
+- The new ICA workflow records current decisions; it does not reconstruct the
+  undocumented component choices made in the historical EEGLAB analysis.
 - Group comparisons cannot be reconstructed without group labels.
 - Individual source localization is out of scope because MRI and digitized geometry are unavailable.
 - The current public fixture is synthetic; an independent public stop-signal example has not yet been integrated.
@@ -185,6 +215,57 @@ python scripts/run_dataset_preprocess.py \
   --output results/processed
 ```
 
+ICA is optional and never removes components automatically. First create a
+public fixture when reproducing the integration example:
+
+```bash
+python scripts/create_ica_validation_fixture.py \
+  --output /new/path/public-ica-fixture
+```
+
+For a real recording, start directly with a private review package from the
+same reviewed bad-channel record:
+
+```bash
+python scripts/run_ica_review.py \
+  --vhdr /path/to/sub-001_task-stop.vhdr \
+  --participant 001 \
+  --bad-channel-manifest /path/to/bad_channel_decisions.csv \
+  --output /private/path/ica-review/sub-001
+```
+
+Review the topographies, time courses, spectra and EOG/ECG correlations. Copy
+`ica_decision_template.csv` outside the immutable review package, then complete
+every row with an explicit `keep` or `exclude` decision. The final preprocessing
+call binds that table to the exact ICA solution by SHA-256:
+
+```bash
+python scripts/run_preprocess.py \
+  --vhdr /path/to/sub-001_task-stop.vhdr \
+  --participant-id 001 \
+  --bad-channel-manifest /path/to/bad_channel_decisions.csv \
+  --ica-solution /private/path/ica-review/sub-001/ica_solution.fif \
+  --ica-decisions /private/path/ica_decisions.csv \
+  --output /private/path/processed/sub-001
+```
+
+Dataset preprocessing accepts the same decision table through
+`--ica-decision-manifest` and a directory of participant review packages
+through `--ica-review-root`.
+
+After a public fixture has been reviewed and processed, reproduce the compact
+validation summary with:
+
+```bash
+python scripts/summarize_ica_validation.py \
+  --vhdr /new/path/public-ica-fixture/synthetic_ica.vhdr \
+  --review-package /private/path/ica-review/synthetic \
+  --decisions /private/path/ica_decisions.csv \
+  --processed-output /private/path/processed/synthetic \
+  --fixture-seed 4401 \
+  --output /new/path/ica_validation_summary.json
+```
+
 Dataset-level commands are available in `scripts/run_dataset_qc.py` and
 `scripts/run_dataset_preprocess.py`. The MATLAB script in
 [`matlab/preprocess_eeglab.m`](matlab/preprocess_eeglab.m) is a historical
@@ -206,10 +287,11 @@ page, and the code is released under the [MIT License](LICENSE).
 
 ## Current status
 
-- **Implemented:** executable event definitions, conservative trial reconstruction, reconciliation, reviewed interpolation, filtering, rereferencing, epoching, provenance, and dual-format export.
+- **Implemented:** executable event definitions, conservative trial reconstruction, reconciliation, reviewed interpolation, filtering, rereferencing, explicit ICA review and decisions, epoching, provenance, and dual-format export.
 - **Tested:** synthetic marker, configuration, provenance, epoch-accounting, and preprocessing contracts in CI.
 - **Evaluated:** controlled methods run on 10 private recordings, with verified participant and dataset provenance.
 - **Benchmark:** known-truth detection, BrainVision round trip, trial accounting,
   band-power preservation and C3/C4 task-signal preservation are implemented.
-- **Next:** add one public 128-channel stop-signal example and an explicit ICA component-decision table.
+- **Next:** define a provenance-bound segment-review input before any private
+  ICA rerun, then add one independent public stop-signal example.
 - **Not validated:** group analysis, exact original ICA choices, source localization, or generalization beyond the evaluated recordings.
