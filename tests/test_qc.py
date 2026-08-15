@@ -12,7 +12,6 @@ import mne
 import numpy as np
 import pandas as pd
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault("MPLBACKEND", "Agg")
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -46,11 +45,14 @@ class TemporalQCTests(unittest.TestCase):
         rng = np.random.default_rng(41)
         data = rng.normal(scale=2e-6, size=(16, int(sfreq * seconds)))
         time = np.arange(data.shape[1]) / sfreq
-        data += np.sin(2 * np.pi * 10 * time) * np.linspace(
-            4e-6,
-            8e-6,
-            16,
-        )[:, np.newaxis]
+        data += (
+            np.sin(2 * np.pi * 10 * time)
+            * np.linspace(
+                4e-6,
+                8e-6,
+                16,
+            )[:, np.newaxis]
+        )
         late = (time >= 55) & (time < 60)
         data[3, late] += 2e-3 * np.sin(2 * np.pi * 6 * time[late])
         info = mne.create_info(
@@ -164,8 +166,38 @@ class TemporalQCTests(unittest.TestCase):
         row = metrics.loc[metrics["channel"] == "E02"].iloc[0]
 
         self.assertTrue(row["flat_flag"])
-        self.assertFalse(row["window_flag"])
+        self.assertTrue(row["window_flag"])
+        self.assertIn("low_filtered_std", row["flag_reason"])
         self.assertIn("flat_segment", row["flag_reason"])
+
+    def test_attenuated_nonflat_channel_is_sent_to_review(self):
+        sfreq = 100.0
+        rng = np.random.default_rng(73)
+        data = rng.normal(scale=3e-6, size=(16, 2000))
+        data[2] *= 1e-3
+        raw = mne.io.RawArray(
+            data,
+            mne.create_info([f"E{i:02d}" for i in range(16)], sfreq, "eeg"),
+            verbose="ERROR",
+        )
+        analysis = load_analysis_config()
+
+        metrics = _full_recording_window_metrics(
+            raw,
+            self._filtered(raw, analysis),
+            analysis.qc,
+        )
+        row = metrics.loc[metrics["channel"] == "E02"].iloc[0]
+        summary = _summarize_full_recording_windows(metrics).set_index("channel")
+
+        self.assertTrue(row["window_flag"])
+        self.assertFalse(row["flat_flag"])
+        self.assertIn("low_filtered_std", row["flag_reason"])
+        self.assertLess(summary.loc["E02", "signed_z_at_maximum_abs_std"], -5)
+        self.assertAlmostEqual(
+            summary.loc["E02", "maximum_abs_z_log_filtered_std"],
+            abs(summary.loc["E02", "signed_z_at_maximum_abs_std"]),
+        )
 
     def test_candidate_trace_figure_supports_sparse_array_adjacency(self):
         sfreq = 100.0

@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -115,6 +113,36 @@ class ProvenanceTests(unittest.TestCase):
             write_provenance(output, core)
             with self.assertRaisesRegex(ValueError, "Unsafe"):
                 verify_provenance(output)
+
+    def test_symlink_directory_output_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = brainvision_stub(root)
+            output = root / "output"
+            output.mkdir()
+            (output / "artifact.txt").write_text("original", encoding="utf-8")
+            core = build_provenance_core(
+                vhdr=header,
+                participant_id="001",
+                analysis=load_analysis_config(),
+                bad_channel_decisions=[],
+            )
+            write_provenance(output, core)
+            external = root / "external"
+            external.mkdir()
+            (output / "linked-directory").symlink_to(external, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "Unsafe"):
+                verify_provenance(output)
+
+    def test_symlink_output_root_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target"
+            target.mkdir()
+            link = root / "linked-output"
+            link.symlink_to(target, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "output root symlink"):
+                verify_provenance(link)
     def test_core_is_stable_and_does_not_expose_source_names_or_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

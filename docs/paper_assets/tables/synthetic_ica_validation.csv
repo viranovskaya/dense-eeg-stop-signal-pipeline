@@ -1,0 +1,11 @@
+group,metric,value,display_value,unit,fixture_count,channels_or_values_aggregated
+fit,iterations,530.0,530.000,iterations,1,
+eog,maximum_absolute_correlation_before,0.2954079273223865,0.295,correlation,1,127
+eog,maximum_absolute_correlation_after,0.028169337497671268,0.028,correlation,1,127
+ecg,maximum_absolute_correlation_before,0.176474526480538,0.176,correlation,1,127
+ecg,maximum_absolute_correlation_after,0.049400013629501784,0.049,correlation,1,127
+band_power,median_absolute_change,0.08216840367697781,0.082,dB,1,508
+band_power,p95_absolute_change,0.6452354823080523,0.645,dB,1,508
+band_power,maximum_absolute_change,0.9940547086258325,0.994,dB,1,508
+task_signal,maximum_peak_amplitude_change,0.2302129212597297,0.230,microvolts,1,2
+task_signal,maximum_peak_latency_change,0.0,0.000,ms,1,2

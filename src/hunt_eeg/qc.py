@@ -86,7 +86,9 @@ def _read_brainvision_compat(vhdr: Path) -> mne.io.BaseRaw:
             ),
             encoding="utf-8",
         )
-        return mne.io.read_raw_brainvision(temporary_header, preload=False, verbose="ERROR")
+        return mne.io.read_raw_brainvision(
+            temporary_header, preload=False, verbose="ERROR"
+        )
 
 
 def _robust_z(values: np.ndarray) -> np.ndarray:
@@ -130,7 +132,7 @@ def _representative_data(
     start_samples = np.unique(np.round(starts * sfreq).astype(int))
     chunks = []
     for start in start_samples:
-        stop = min(raw.n_times, start + int(round(window_s * sfreq)))
+        stop = min(raw.n_times, start + round(window_s * sfreq))
         chunks.append(raw.get_data(picks=picks, start=start, stop=stop))
     return np.concatenate(chunks, axis=1)
 
@@ -194,7 +196,7 @@ def _full_recording_window_metrics(
     """Screen every sample in non-overlapping windows for review candidates."""
     picks = mne.pick_types(raw.info, eeg=True, ecg=False, eog=False, exclude=[])
     sfreq = float(raw.info["sfreq"])
-    window_samples = max(1, int(round(qc.full_recording_window_seconds * sfreq)))
+    window_samples = max(1, round(qc.full_recording_window_seconds * sfreq))
     starts = list(range(0, raw.n_times, window_samples))
     rows: list[dict] = []
     for window_index, start in enumerate(starts, start=1):
@@ -207,8 +209,8 @@ def _full_recording_window_metrics(
         flat_fraction = np.mean(np.abs(np.diff(data, axis=1)) < 1e-10, axis=1)
         z_std = _robust_z(np.log10(np.maximum(filtered_std_uv, 1e-12)))
         z_range = _robust_z(np.log10(np.maximum(filtered_range_uv, 1e-12)))
-        window_flag = (z_std > qc.robust_z_threshold) | (
-            z_range > qc.robust_z_threshold
+        window_flag = (np.abs(z_std) > qc.robust_z_threshold) | (
+            np.abs(z_range) > qc.robust_z_threshold
         )
         flat_flag = flat_fraction > qc.flat_fraction_threshold
         raw_deviation = np.abs(data - np.median(data, axis=1, keepdims=True))
@@ -225,8 +227,12 @@ def _full_recording_window_metrics(
             reasons = []
             if z_std[offset] > qc.robust_z_threshold:
                 reasons.append("high_filtered_std")
+            if z_std[offset] < -qc.robust_z_threshold:
+                reasons.append("low_filtered_std")
             if z_range[offset] > qc.robust_z_threshold:
                 reasons.append("high_filtered_range")
+            if z_range[offset] < -qc.robust_z_threshold:
+                reasons.append("low_filtered_range")
             if flat_flag[offset]:
                 reasons.append("flat_segment")
             rows.append(
@@ -261,9 +267,7 @@ def _full_recording_window_metrics(
                     "flat_flag": bool(flat_flag[offset]),
                     "flag_reason": ";".join(reasons),
                     "std_qc_status": "scored" if std_scorable else "zero_mad",
-                    "range_qc_status": (
-                        "scored" if range_scorable else "zero_mad"
-                    ),
+                    "range_qc_status": ("scored" if range_scorable else "zero_mad"),
                     "qc_status": qc_status,
                 }
             )
@@ -274,17 +278,15 @@ def _summarize_full_recording_windows(metrics: pd.DataFrame) -> pd.DataFrame:
     """Reduce the full temporal screen without discarding window evidence."""
     rows = []
     total_duration = float(
-        metrics[["window_index", "duration_s"]]
-        .drop_duplicates()["duration_s"]
-        .sum()
+        metrics[["window_index", "duration_s"]].drop_duplicates()["duration_s"].sum()
     )
     for channel, table in metrics.groupby("channel", sort=False):
         flagged = table["window_flag"] | table["flat_flag"]
         scored = table["qc_status"] != "unscorable_zero_mad"
         valid_std = table["z_log_filtered_std"].dropna()
         valid_range = table["z_log_filtered_range"].dropna()
-        std_index = valid_std.idxmax() if not valid_std.empty else None
-        range_index = valid_range.idxmax() if not valid_range.empty else None
+        std_index = valid_std.abs().idxmax() if not valid_std.empty else None
+        range_index = valid_range.abs().idxmax() if not valid_range.empty else None
         raw_index = table["raw_max_abs_deviation_uv"].idxmax()
         filtered_index = table["filtered_max_abs_deviation_uv"].idxmax()
         intervals = table.loc[flagged, ["start_s", "stop_s"]]
@@ -299,22 +301,30 @@ def _summarize_full_recording_windows(metrics: pd.DataFrame) -> pd.DataFrame:
                     table.loc[flagged, "duration_s"].sum() / total_duration
                 ),
                 "flat_window_count": int(table["flat_flag"].sum()),
-                "maximum_z_log_filtered_std": float(
+                "maximum_abs_z_log_filtered_std": float(
+                    abs(table.loc[std_index, "z_log_filtered_std"])
+                    if std_index is not None
+                    else np.nan
+                ),
+                "signed_z_at_maximum_abs_std": float(
                     table.loc[std_index, "z_log_filtered_std"]
                     if std_index is not None
                     else np.nan
                 ),
-                "maximum_z_std_window_start_s": float(
-                    table.loc[std_index, "start_s"]
-                    if std_index is not None
+                "maximum_abs_z_std_window_start_s": float(
+                    table.loc[std_index, "start_s"] if std_index is not None else np.nan
+                ),
+                "maximum_abs_z_log_filtered_range": float(
+                    abs(table.loc[range_index, "z_log_filtered_range"])
+                    if range_index is not None
                     else np.nan
                 ),
-                "maximum_z_log_filtered_range": float(
+                "signed_z_at_maximum_abs_range": float(
                     table.loc[range_index, "z_log_filtered_range"]
                     if range_index is not None
                     else np.nan
                 ),
-                "maximum_z_range_window_start_s": float(
+                "maximum_abs_z_range_window_start_s": float(
                     table.loc[range_index, "start_s"]
                     if range_index is not None
                     else np.nan
@@ -372,16 +382,10 @@ def _compute_psd(
         )
     psd, freqs = spectrum.get_data(return_freqs=True)
     psd_db_uv = 10.0 * np.log10(np.maximum(psd * 1e12, np.finfo(float).tiny))
-    line_mask = (freqs >= line_frequency_hz - 1.0) & (
-        freqs <= line_frequency_hz + 1.0
-    )
+    line_mask = (freqs >= line_frequency_hz - 1.0) & (freqs <= line_frequency_hz + 1.0)
     flank_mask = (
-        (freqs >= line_frequency_hz - 5.0)
-        & (freqs < line_frequency_hz - 2.0)
-    ) | (
-        (freqs > line_frequency_hz + 2.0)
-        & (freqs <= line_frequency_hz + 5.0)
-    )
+        (freqs >= line_frequency_hz - 5.0) & (freqs < line_frequency_hz - 2.0)
+    ) | ((freqs > line_frequency_hz + 2.0) & (freqs <= line_frequency_hz + 5.0))
     if line_mask.any() and flank_mask.any():
         tiny = np.finfo(float).tiny
         line_power = np.maximum(np.mean(psd[:, line_mask], axis=1), tiny)
@@ -419,7 +423,10 @@ def _save_plots(
 
     trial_counts = trials["trial_class"].value_counts().sort_index()
     fig, ax = plt.subplots(figsize=(9, 4.5))
-    colors = ["#4daf4a" if "correct" in label or "successful" in label else "#e41a1c" for label in trial_counts.index]
+    colors = [
+        "#4daf4a" if "correct" in label or "successful" in label else "#e41a1c"
+        for label in trial_counts.index
+    ]
     ax.bar(trial_counts.index, trial_counts.values, color=colors)
     ax.set(title="Reconstructed trial outcomes", ylabel="Trials")
     ax.tick_params(axis="x", rotation=25)
@@ -449,7 +456,9 @@ def _save_plots(
     fig, ax = plt.subplots(figsize=(9, 5))
     median = np.median(psd_db_uv, axis=0)
     low, high = np.percentile(psd_db_uv, [10, 90], axis=0)
-    ax.fill_between(freqs, low, high, color="#9ecae1", alpha=0.65, label="10–90% channels")
+    ax.fill_between(
+        freqs, low, high, color="#9ecae1", alpha=0.65, label="10–90% channels"
+    )
     ax.plot(freqs, median, color="#08519c", linewidth=1.5, label="median")
     ax.axvline(
         line_frequency_hz,
@@ -458,7 +467,12 @@ def _save_plots(
         linewidth=1.0,
         label=f"{line_frequency_hz:g} Hz",
     )
-    ax.set(title="Raw EEG power spectral density", xlabel="Frequency (Hz)", ylabel="PSD (dB µV²/Hz)", xlim=(0.5, 100.0))
+    ax.set(
+        title="Raw EEG power spectral density",
+        xlabel="Frequency (Hz)",
+        ylabel="PSD (dB µV²/Hz)",
+        xlim=(0.5, 100.0),
+    )
     ax.legend(frameon=False)
     ax.grid(alpha=0.2)
     fig.tight_layout()
@@ -470,11 +484,23 @@ def _save_plots(
     view = view - np.median(view, axis=1, keepdims=True)
     clip = max(50.0, float(np.nanpercentile(np.abs(view), 98)))
     fig, ax = plt.subplots(figsize=(12, 7))
-    image = ax.imshow(view, aspect="auto", interpolation="nearest", cmap="RdBu_r", vmin=-clip, vmax=clip, extent=[0, 10, len(picks), 0])
+    image = ax.imshow(
+        view,
+        aspect="auto",
+        interpolation="nearest",
+        cmap="RdBu_r",
+        vmin=-clip,
+        vmax=clip,
+        extent=[0, 10, len(picks), 0],
+    )
     labels = [raw.ch_names[index] for index in picks]
     tick_positions = np.arange(0, len(labels), 10)
     ax.set_yticks(tick_positions + 0.5, [labels[index] for index in tick_positions])
-    ax.set(title="Representative 10-second raw EEG window", xlabel="Time (s)", ylabel="EEG channel")
+    ax.set(
+        title="Representative 10-second raw EEG window",
+        xlabel="Time (s)",
+        ylabel="EEG channel",
+    )
     fig.colorbar(image, ax=ax, label="Amplitude (µV, channel median removed)")
     fig.tight_layout()
     fig.savefig(figures / "raw_overview.png", dpi=160)
@@ -517,20 +543,24 @@ def _save_full_recording_scan_plot(
     channels = window_metrics["channel"].drop_duplicates().tolist()
     windows = sorted(window_metrics["window_index"].unique())
     score = window_metrics.assign(
-        maximum_z=window_metrics[
-            ["z_log_filtered_std", "z_log_filtered_range"]
-        ].max(axis=1)
+        maximum_z=window_metrics[["z_log_filtered_std", "z_log_filtered_range"]]
+        .abs()
+        .max(axis=1)
     ).pivot(index="channel", columns="window_index", values="maximum_z")
     score = score.reindex(index=channels, columns=windows)
-    flags = window_metrics.assign(
-        requires_review=(
-            window_metrics["window_flag"] | window_metrics["flat_flag"]
+    flags = (
+        window_metrics.assign(
+            requires_review=(
+                window_metrics["window_flag"] | window_metrics["flat_flag"]
+            )
         )
-    ).pivot(
-        index="channel",
-        columns="window_index",
-        values="requires_review",
-    ).reindex(index=channels, columns=windows)
+        .pivot(
+            index="channel",
+            columns="window_index",
+            values="requires_review",
+        )
+        .reindex(index=channels, columns=windows)
+    )
     finite_scores = score.to_numpy()[np.isfinite(score.to_numpy())]
     color_maximum = (
         max(10.0, float(np.percentile(finite_scores, 99)))
@@ -556,7 +586,7 @@ def _save_full_recording_scan_plot(
         xlabel="Non-overlapping window from recording start",
         ylabel="EEG channel",
     )
-    fig.colorbar(image, ax=ax, label="max robust z across amplitude metrics")
+    fig.colorbar(image, ax=ax, label="max |robust z| across amplitude metrics")
     fig.tight_layout()
     fig.savefig(figures / "full_recording_window_scan.png", dpi=160)
     plt.close(fig)
@@ -573,12 +603,39 @@ def _save_candidate_window_traces(
     if candidates.empty:
         return
     review_dir = output / "figures" / "window_reviews"
+    _save_window_trace_figures(review_dir, raw, filtered_raw, candidates)
+
+
+def _save_window_trace_figures(
+    review_dir: Path,
+    raw: mne.io.BaseRaw,
+    filtered_raw: mne.io.BaseRaw,
+    candidates: pd.DataFrame,
+    *,
+    identifier_column: str | None = None,
+    context_seconds: float = 0.0,
+    mark_prompt: bool = False,
+) -> list[Path]:
+    """Save one trace panel for every supplied candidate row."""
+    if candidates.empty:
+        return []
     review_dir.mkdir(parents=True, exist_ok=True)
-    adjacency, adjacency_names = mne.channels.find_ch_adjacency(raw.info, "eeg")
-    adjacency = csr_matrix(adjacency)
+    eeg_indices = mne.pick_types(raw.info, eeg=True, exclude=[])
+    eeg_names = [raw.ch_names[index] for index in eeg_indices]
+    if len(eeg_names) < 4:
+        adjacency_names = eeg_names
+        adjacency = csr_matrix(~np.eye(len(eeg_names), dtype=bool))
+    else:
+        adjacency, adjacency_names = mne.channels.find_ch_adjacency(raw.info, "eeg")
+        adjacency = csr_matrix(adjacency)
     name_to_index = {name: index for index, name in enumerate(adjacency_names)}
     sfreq = float(raw.info["sfreq"])
+    written = []
     for row in candidates.itertuples(index=False):
+        if row.channel not in name_to_index:
+            raise ValueError(
+                f"Candidate channel is absent from EEG adjacency: {row.channel}"
+            )
         target_index = name_to_index[row.channel]
         neighbor_indices = adjacency.getrow(target_index).indices.tolist()
         neighbor_names = [
@@ -587,13 +644,20 @@ def _save_candidate_window_traces(
             if adjacency_names[index] != row.channel
         ]
         names = [row.channel, *neighbor_names]
-        start = int(row.start_sample)
-        stop = int(row.stop_sample_exclusive)
-        time = np.arange(stop - start) / sfreq + float(row.start_s)
+        prompt_start = int(row.start_sample)
+        prompt_stop = int(row.stop_sample_exclusive)
+        context_samples = max(0, round(context_seconds * sfreq))
+        start = max(0, prompt_start - context_samples)
+        stop = min(raw.n_times, prompt_stop + context_samples)
+        time = np.arange(start, stop) / sfreq
         raw_data = raw.get_data(picks=names, start=start, stop=stop) * 1e6
-        filtered_data = (
-            filtered_raw.get_data(picks=names, start=start, stop=stop) * 1e6
-        )
+        filtered_data = filtered_raw.get_data(picks=names, start=start, stop=stop) * 1e6
+        raw_data -= np.median(raw_data, axis=1, keepdims=True)
+        filtered_data -= np.median(filtered_data, axis=1, keepdims=True)
+        limits = [
+            max(float(np.max(np.abs(raw_data))), np.finfo(float).eps),
+            max(float(np.max(np.abs(filtered_data))), np.finfo(float).eps),
+        ]
         fig, axes = plt.subplots(
             len(names),
             2,
@@ -607,43 +671,61 @@ def _save_candidate_window_traces(
             for column, (trace, title) in enumerate(
                 ((raw_trace, "Raw"), (filtered_trace, "Filtered"))
             ):
-                centered = trace - np.median(trace)
                 axis = axes[index, column]
-                axis.plot(time, centered, linewidth=0.65, color="#244f73")
+                axis.plot(time, trace, linewidth=0.65, color="#244f73")
+                axis.set_ylim(-1.05 * limits[column], 1.05 * limits[column])
                 axis.set_ylabel(f"{name}\nµV")
                 axis.grid(alpha=0.15)
+                if mark_prompt:
+                    axis.axvline(float(row.start_s), color="#b33a3a", linestyle="--")
+                    axis.axvline(float(row.stop_s), color="#b33a3a", linestyle="--")
                 axis.text(
                     0.99,
                     0.88,
-                    f"max |Δ|={np.max(np.abs(centered)):.1f} µV",
+                    f"max |x − median(x)|={np.max(np.abs(trace)):.1f} µV",
                     transform=axis.transAxes,
                     ha="right",
                     va="top",
                     fontsize=7,
                 )
                 if index == 0:
-                    axis.set_title(title)
+                    axis.set_title(f"{title} · shared scale across rows")
         axes[-1, 0].set_xlabel("Recording time (s)")
         axes[-1, 1].set_xlabel("Recording time (s)")
         fig.suptitle(
-            f"Review candidate {row.channel}: {row.start_s:.3f}–{row.stop_s:.3f} s"
+            (
+                f"Review candidate {getattr(row, identifier_column)} · "
+                if identifier_column is not None
+                else "Review candidate "
+            )
+            + (
+                f"{row.channel}: prompt {row.start_s:.3f}–{row.stop_s:.3f} s · "
+                f"plotted {start / sfreq:.3f}–{stop / sfreq:.3f} s"
+            )
         )
         fig.tight_layout()
         safe_channel = re.sub(r"[^A-Za-z0-9_-]", "_", row.channel)
-        fig.savefig(
-            review_dir / f"window-{int(row.window_index):03d}_{safe_channel}.png",
-            dpi=150,
-        )
+        if identifier_column is None:
+            filename = f"window-{int(row.window_index):03d}_{safe_channel}.png"
+        else:
+            identifier = re.sub(
+                r"[^A-Za-z0-9_-]", "_", str(getattr(row, identifier_column))
+            )
+            filename = f"{identifier}_{safe_channel}.png"
+        path = review_dir / filename
+        fig.savefig(path, dpi=150)
         plt.close(fig)
+        written.append(path)
+    return written
 
 
 def _select_candidate_review_windows(window_metrics: pd.DataFrame) -> pd.DataFrame:
     """Select at most one amplitude and one flat exemplar per channel."""
     amplitude = window_metrics.loc[window_metrics["window_flag"]].copy()
     if not amplitude.empty:
-        amplitude["review_score"] = amplitude[
-            ["z_log_filtered_std", "z_log_filtered_range"]
-        ].max(axis=1)
+        amplitude["review_score"] = (
+            amplitude[["z_log_filtered_std", "z_log_filtered_range"]].abs().max(axis=1)
+        )
         amplitude = amplitude.loc[
             amplitude.groupby("channel", sort=False)["review_score"].idxmax()
         ]
@@ -651,9 +733,7 @@ def _select_candidate_review_windows(window_metrics: pd.DataFrame) -> pd.DataFra
     flat = window_metrics.loc[window_metrics["flat_flag"]].copy()
     if not flat.empty:
         flat["review_score"] = flat["flat_fraction"]
-        flat = flat.loc[
-            flat.groupby("channel", sort=False)["review_score"].idxmax()
-        ]
+        flat = flat.loc[flat.groupby("channel", sort=False)["review_score"].idxmax()]
 
     selected = pd.concat([amplitude, flat], ignore_index=False)
     if selected.empty:
@@ -726,9 +806,7 @@ def _run_qc_into(vhdr: Path, output: Path, participant_id: str) -> dict:
         analysis.qc,
     )
     temporal_summary = _summarize_full_recording_windows(window_metrics)
-    freqs, psd_db_uv, line_ratio_db = _compute_psd(
-        raw, analysis.line_frequency_hz
-    )
+    freqs, psd_db_uv, line_ratio_db = _compute_psd(raw, analysis.line_frequency_hz)
     metrics["line_noise_ratio_db"] = line_ratio_db
     metrics["review_high_line_noise"] = (
         line_ratio_db > analysis.qc.line_noise_ratio_db_threshold
@@ -744,9 +822,7 @@ def _run_qc_into(vhdr: Path, output: Path, participant_id: str) -> dict:
     ].to_csv(output / "candidate_window_review.csv", index=False)
 
     trial_counts = trials["trial_class"].value_counts().sort_index().to_dict()
-    representative_bads = metrics.loc[
-        metrics["candidate_bad"], "channel"
-    ].tolist()
+    representative_bads = metrics.loc[metrics["candidate_bad"], "channel"].tolist()
     temporal_bads = temporal_summary.loc[
         temporal_summary["channel_requires_review"],
         "channel",
@@ -759,9 +835,9 @@ def _run_qc_into(vhdr: Path, output: Path, participant_id: str) -> dict:
         "sampling_frequency_hz": float(raw.info["sfreq"]),
         "duration_seconds": float(raw.n_times / raw.info["sfreq"]),
         "channels_total": len(raw.ch_names),
-        "channels_eeg": int(len(picks)),
-        "channels_ecg": int(len(mne.pick_types(raw.info, ecg=True, eeg=False, eog=False))),
-        "channels_eog": int(len(mne.pick_types(raw.info, eog=True, eeg=False, ecg=False))),
+        "channels_eeg": len(picks),
+        "channels_ecg": len(mne.pick_types(raw.info, ecg=True, eeg=False, eog=False)),
+        "channels_eog": len(mne.pick_types(raw.info, eog=True, eeg=False, ecg=False)),
         "annotations_total": len(raw.annotations),
         "stimulus_markers_total": len(markers),
         "trial_counts": {str(key): int(value) for key, value in trial_counts.items()},
@@ -822,7 +898,9 @@ def _run_qc_into(vhdr: Path, output: Path, participant_id: str) -> dict:
         "median_line_noise_ratio_db": float(np.median(line_ratio_db)),
         "montage_warnings": [str(item.message) for item in montage_warnings],
     }
-    (output / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    (output / "summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     _save_plots(
         output,
@@ -856,11 +934,11 @@ def _run_qc_into(vhdr: Path, output: Path, participant_id: str) -> dict:
 
 ## Recording
 
-- Duration: {summary['duration_seconds'] / 60:.2f} minutes
-- Sampling frequency: {summary['sampling_frequency_hz']:.0f} Hz
-- Channels: {summary['channels_total']} total; {summary['channels_eeg']} EEG; {summary['channels_ecg']} ECG; {summary['channels_eog']} EOG
-- Stimulus markers: {summary['stimulus_markers_total']}
-- Median {summary['line_frequency_hz']:g} Hz line-noise ratio: {summary['median_line_noise_ratio_db']:.2f} dB
+- Duration: {summary["duration_seconds"] / 60:.2f} minutes
+- Sampling frequency: {summary["sampling_frequency_hz"]:.0f} Hz
+- Channels: {summary["channels_total"]} total; {summary["channels_eeg"]} EEG; {summary["channels_ecg"]} ECG; {summary["channels_eog"]} EOG
+- Stimulus markers: {summary["stimulus_markers_total"]}
+- Median {summary["line_frequency_hz"]:g} Hz line-noise ratio: {summary["median_line_noise_ratio_db"]:.2f} dB
 
 ## Reconstructed trials
 
@@ -868,7 +946,7 @@ def _run_qc_into(vhdr: Path, output: Path, participant_id: str) -> dict:
 
 ## Candidate bad EEG channels
 
-{', '.join(candidate_bads) if candidate_bads else 'No channels crossed the conservative automatic thresholds.'}
+{", ".join(candidate_bads) if candidate_bads else "No channels crossed the conservative automatic thresholds."}
 
 These are screening candidates only. Confirm them by inspecting the raw traces, spatial neighbors, spectra, and persistence across the recording before interpolation.
 
@@ -879,7 +957,7 @@ automatically.
 
 ## Channels with unusually concentrated line-frequency power
 
-{', '.join(high_line_noise) if high_line_noise else 'None.'}
+{", ".join(high_line_noise) if high_line_noise else "None."}
 
 These channels are not automatically bad. They require review in the filtered trace before any interpolation decision.
 
@@ -926,9 +1004,7 @@ def run_qc(vhdr: Path, output: Path, participant_id: str = "qc") -> dict:
     if output.exists():
         raise FileExistsError("QC requires a new output path; reuse is disabled")
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = Path(
-        tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent)
-    )
+    temporary = Path(tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent))
     temporary.rmdir()
     try:
         summary = _run_qc_into(vhdr, temporary, participant_id)

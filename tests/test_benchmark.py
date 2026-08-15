@@ -21,6 +21,7 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from hunt_eeg.benchmark import (
+    _binary_metrics,
     Corruption,
     SyntheticBenchmarkConfig,
     inject_corruptions,
@@ -165,6 +166,22 @@ class SyntheticBenchmarkTests(unittest.TestCase):
         self.assertEqual(units["primary_channel_windows"], 3)
         self.assertEqual(units["primary_positive_channel_windows"], 1)
         self.assertEqual(units["stress_positive_channel_windows"], 1)
+
+    def test_binary_metrics_retain_exact_confusion_counts(self):
+        truth = pd.Series([True, True, False, False])
+        predicted = pd.Series([True, False, True, False])
+        metrics = _binary_metrics(truth, predicted)
+        self.assertEqual(
+            {key: metrics[key] for key in (
+                "true_positive", "false_positive", "false_negative", "true_negative"
+            )},
+            {
+                "true_positive": 1,
+                "false_positive": 1,
+                "false_negative": 1,
+                "true_negative": 1,
+            },
+        )
 
     def test_preservation_keeps_clean_samples_separate(self):
         clean = make_clean_recording(self.config, 31)

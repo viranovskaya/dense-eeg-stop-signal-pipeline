@@ -1,0 +1,292 @@
+{
+  "schema_version": "1",
+  "project": "Dense EEG preprocessing with explicit review and provenance",
+  "manuscript_draft": "docs/manuscript_draft.md",
+  "manuscript_draft_sha256": "d2cc9262fb16b53f1ee6911497855114092a2ba7b26b0568c6b06fcc07c9d460",
+  "paper_assets_manifest": "docs/paper_assets/manifest.json",
+  "paper_assets_manifest_sha256": "795410d69c19803574381ab89aaa196a0423fc4714748d5575f88d316c22e89b",
+  "evidence_partitions": [
+    {
+      "id": "legacy_private_rerun",
+      "kind": "controlled_private_data",
+      "status": "completed",
+      "recordings": 10,
+      "recording_minutes": 121.7,
+      "eeg_channels": 129,
+      "sampling_frequency_hz": 1000,
+      "public_decision_level_reproduction": false,
+      "allowed_public_result": "Aggregate execution and provenance accounting only."
+    },
+    {
+      "id": "synthetic_qc_benchmark",
+      "kind": "public_synthetic_known_truth",
+      "status": "completed",
+      "recordings": 3,
+      "repository_result": "docs/benchmark_results/heldout_seed_summary.json",
+      "repository_result_sha256": "7db079b4a7b3e26a51d4e8a10d2ee53dc486a1b617de0cc3ec985f22c59d76cb",
+      "metric_bindings": [
+        {
+          "json_pointer": "/recordings",
+          "expected": 3,
+          "scaffold_text": "Across three reserved seeds"
+        },
+        {
+          "json_pointer": "/evaluation_units_per_recording/primary_channel_windows",
+          "expected": 1135,
+          "scaffold_text": "1,135 primary channel-window pairs per recording"
+        },
+        {
+          "json_pointer": "/evaluation_units_per_recording/primary_positive_channel_windows",
+          "expected": 13,
+          "scaffold_text": "13 positive pairs"
+        },
+        {
+          "json_pointer": "/evaluation_units_per_recording/temporal_channel_windows",
+          "expected": 1136,
+          "scaffold_text": "1,136 all-temporal pairs per recording"
+        },
+        {
+          "json_pointer": "/temporal_primary_detection/f1",
+          "expected": 1.0,
+          "scaffold_text": "precision, recall and F1 of 1.00"
+        },
+        {
+          "json_pointer": "/temporal_detection/recall",
+          "expected": 0.9285714285714285,
+          "scaffold_text": "with recall 0.929"
+        },
+        {
+          "json_pointer": "/temporal_detection/f1",
+          "expected": 0.9629629629629631,
+          "scaffold_text": "F1 0.963"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/unaffected/median_absolute_error_db",
+          "expected": 0.012311331540382773,
+          "scaffold_text": "median absolute power error 0.012 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/unaffected/p95_absolute_error_db",
+          "expected": 0.09183949668202127,
+          "scaffold_text": "95th-percentile error 0.092 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/all_channel_band_values/values",
+          "expected": 1524,
+          "scaffold_text": "Across all 1,524 channel-band values"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/all_channel_band_values/median_absolute_error_db",
+          "expected": 0.013356108976722873,
+          "scaffold_text": "overall median, 95th-percentile and maximum errors were 0.013, 0.100 and 23.774 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/all_channel_band_values/p95_absolute_error_db",
+          "expected": 0.1003052631065276,
+          "scaffold_text": "overall median, 95th-percentile and maximum errors were 0.013, 0.100 and 23.774 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/all_channel_band_values/maximum_absolute_error_db",
+          "expected": 23.774316850894763,
+          "scaffold_text": "overall median, 95th-percentile and maximum errors were 0.013, 0.100 and 23.774 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/unaffected/values",
+          "expected": 1464,
+          "scaffold_text": "unaffected subset contained 1,464 values"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/unaffected/maximum_absolute_error_db",
+          "expected": 0.1405555438701308,
+          "scaffold_text": "0.012, 0.092 and 0.141 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/oracle_interpolated/values",
+          "expected": 24,
+          "scaffold_text": "oracle-interpolated subset contained 24 values"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/oracle_interpolated/median_absolute_error_db",
+          "expected": 6.449938450107913,
+          "scaffold_text": "6.450, 12.751 and 16.798 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/oracle_interpolated/p95_absolute_error_db",
+          "expected": 12.750771321293634,
+          "scaffold_text": "6.450, 12.751 and 16.798 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/oracle_interpolated/maximum_absolute_error_db",
+          "expected": 16.79767755238823,
+          "scaffold_text": "6.450, 12.751 and 16.798 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/non_oracle_corrupted/values",
+          "expected": 36,
+          "scaffold_text": "other corrupted subset contained 36 values"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/non_oracle_corrupted/median_absolute_error_db",
+          "expected": 0.058185529057303065,
+          "scaffold_text": "0.058, 23.293 and 23.774 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/non_oracle_corrupted/p95_absolute_error_db",
+          "expected": 23.29304591896593,
+          "scaffold_text": "0.058, 23.293 and 23.774 dB"
+        },
+        {
+          "json_pointer": "/signal_preservation/band_power_absolute_error_db/non_oracle_corrupted/maximum_absolute_error_db",
+          "expected": 23.774316850894763,
+          "scaffold_text": "0.058, 23.293 and 23.774 dB"
+        }
+      ],
+      "public_decision_level_reproduction": true,
+      "allowed_public_result": "Detection and signal-preservation metrics under the declared corruption model."
+    },
+    {
+      "id": "synthetic_ica_validation",
+      "kind": "public_synthetic_integration",
+      "status": "completed",
+      "recordings": 1,
+      "repository_result": "docs/benchmark_results/ica_seed_4401_summary.json",
+      "repository_result_sha256": "3aaec94231260a73c87dc3cf43ee469d25bdacea0d595cad5b841763261fe44f",
+      "metric_bindings": [
+        {
+          "json_pointer": "/ica/fit_iterations",
+          "expected": 530,
+          "scaffold_text": "after 530 iterations"
+        },
+        {
+          "json_pointer": "/checks/auxiliary_correlation/eog/maximum_absolute_correlation_before",
+          "expected": 0.2954079273223865,
+          "scaffold_text": "EEG-EOG correlation changed from 0.295 to 0.028"
+        },
+        {
+          "json_pointer": "/checks/auxiliary_correlation/eog/maximum_absolute_correlation_after",
+          "expected": 0.028169337497671268,
+          "scaffold_text": "EEG-EOG correlation changed from 0.295 to 0.028"
+        },
+        {
+          "json_pointer": "/checks/auxiliary_correlation/ecg/maximum_absolute_correlation_before",
+          "expected": 0.176474526480538,
+          "scaffold_text": "EEG-ECG correlation from 0.176 to 0.049"
+        },
+        {
+          "json_pointer": "/checks/auxiliary_correlation/ecg/maximum_absolute_correlation_after",
+          "expected": 0.049400013629501784,
+          "scaffold_text": "EEG-ECG correlation from 0.176 to 0.049"
+        },
+        {
+          "json_pointer": "/checks/signal_preservation/band_power/channel_band_values",
+          "expected": 508,
+          "scaffold_text": "Across 508 channel-band values"
+        },
+        {
+          "json_pointer": "/checks/signal_preservation/band_power/median_absolute_change_db",
+          "expected": 0.08216840367697781,
+          "scaffold_text": "0.082, 0.645 and 0.994 dB"
+        },
+        {
+          "json_pointer": "/checks/signal_preservation/band_power/p95_absolute_change_db",
+          "expected": 0.6452354823080523,
+          "scaffold_text": "0.082, 0.645 and 0.994 dB"
+        },
+        {
+          "json_pointer": "/checks/signal_preservation/band_power/maximum_absolute_change_db",
+          "expected": 0.9940547086258325,
+          "scaffold_text": "0.082, 0.645 and 0.994 dB"
+        },
+        {
+          "json_pointer": "/checks/signal_preservation/task_signal/maximum_peak_amplitude_change_uv",
+          "expected": 0.2302129212597297,
+          "scaffold_text": "peak-amplitude change was 0.230 microvolts"
+        },
+        {
+          "json_pointer": "/checks/signal_preservation/task_signal/maximum_peak_latency_change_ms",
+          "expected": 0.0,
+          "scaffold_text": "largest latency change was 0 ms"
+        }
+      ],
+      "public_decision_level_reproduction": true,
+      "allowed_public_result": "One fixed reviewed ICA integration result, without a generalization claim."
+    },
+    {
+      "id": "hbn_bids_eeglab",
+      "kind": "public_participant_eeg_controlled_derived",
+      "dataset": "OpenNeuro ds005508 snapshot 1.0.1",
+      "status": "inventory_and_qc_only",
+      "repository_contract": "docs/bids_eeglab_adapter.md",
+      "repository_contract_sha256": "4f0023da44981eec9c5d6d5fa9aeee8a321ac9371e23a7fc0005f8d5bad13ebe",
+      "public_decision_level_reproduction": false,
+      "allowed_public_result": "Adapter, inventory and review-prompt behavior only until human decisions are complete."
+    },
+    {
+      "id": "synthetic_bids_eeglab_path",
+      "kind": "public_synthetic_integration",
+      "status": "completed",
+      "recordings": 1,
+      "repository_contract": "docs/bids_eeglab_adapter.md",
+      "repository_contract_sha256": "4f0023da44981eec9c5d6d5fa9aeee8a321ac9371e23a7fc0005f8d5bad13ebe",
+      "public_decision_level_reproduction": true,
+      "allowed_public_result": "Deterministic software-path evidence for review finalization, ICA, interpolation and epoch rejection."
+    }
+  ],
+  "claims": [
+    {
+      "id": "deterministic_public_workflows",
+      "status": "supported",
+      "evidence": [
+        "synthetic_qc_benchmark",
+        "synthetic_ica_validation",
+        "synthetic_bids_eeglab_path"
+      ],
+      "wording": "The public synthetic workflows are deterministic under the pinned runtime."
+    },
+    {
+      "id": "controlled_legacy_execution",
+      "status": "supported_with_private_boundary",
+      "evidence": [
+        "legacy_private_rerun"
+      ],
+      "wording": "The recovered legacy workflow completed on 10 controlled recordings with provenance-verified outputs."
+    },
+    {
+      "id": "hbn_adapter_fail_closed",
+      "status": "supported",
+      "evidence": [
+        "hbn_bids_eeglab",
+        "synthetic_bids_eeglab_path"
+      ],
+      "wording": "The HBN adapter separates verified inventory and QC prompts from human-authorized downstream processing."
+    },
+    {
+      "id": "real_hbn_cleaning_effectiveness",
+      "status": "blocked",
+      "evidence": [
+        "hbn_bids_eeglab"
+      ],
+      "blockers": [
+        "completed human channel decisions",
+        "completed human segment decisions",
+        "completed human ICA-component decisions"
+      ],
+      "prohibited_wording": "The pipeline successfully cleaned the HBN recording."
+    },
+    {
+      "id": "automatic_artifact_classification",
+      "status": "not_supported",
+      "evidence": [
+        "synthetic_qc_benchmark",
+        "synthetic_ica_validation"
+      ],
+      "prohibited_wording": "The software automatically identifies bad channels, segments or ICA components."
+    },
+    {
+      "id": "scientific_or_clinical_validity",
+      "status": "not_supported",
+      "evidence": [],
+      "prohibited_wording": "The workflow establishes scientific validity, diagnostic accuracy or clinical suitability."
+    }
+  ]
+}

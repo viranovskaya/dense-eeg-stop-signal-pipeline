@@ -42,6 +42,9 @@ I implemented:
 - a public 127-channel corruption benchmark with known channel-window truth,
   held-out seeds, BrainVision round-trip checks, and separate detection and
   signal-preservation measures.
+- a fail-closed BIDS/EEGLAB adapter for a second public 129-channel dataset,
+  with full-recording QC, immutable manual decisions, guarded filtering,
+  reference reconstruction, and a review-only ICA package.
 
 The recovered marker logic is documented in
 [`docs/recovered_protocol.md`](docs/recovered_protocol.md). The scientific scope
@@ -104,6 +107,9 @@ percentile of 0.092 dB and a maximum of 0.141 dB. Errors were much larger for
 the 24 oracle-interpolated values and the 36 values from other corrupted
 channels. The complete center, upper-tail and maximum statistics are retained
 in the [machine-readable held-out summary](docs/benchmark_results/heldout_seed_summary.json).
+The manuscript-facing [vector summary figure](docs/paper_assets/figures/synthetic_qc_validation.svg)
+and [tidy QC table](docs/paper_assets/tables/synthetic_qc_validation.csv) are regenerated
+directly from that summary.
 These are controlled synthetic software results, not evidence that unknown EEG
 signals can be reconstructed or estimates of performance on participant data.
 
@@ -129,6 +135,60 @@ the review, decision-binding, application and reporting path works as intended;
 it does not validate automatic component classification or performance on
 participant EEG. Exact values and environment versions are in the
 [machine-readable summary](docs/benchmark_results/ica_seed_4401_summary.json).
+The corresponding [tidy ICA table](docs/paper_assets/tables/synthetic_ica_validation.csv)
+is generated from the same machine-readable result.
+
+## Public BIDS/EEGLAB adapter
+
+The second public-data path targets HBN-EEG Release 4 (`ds005508`, snapshot
+`1.0.1`). It verifies the exact BIDS/EEGLAB recording, inherited sidecars,
+events, units, flat Cz online reference, and the 129-channel mapping to the
+`GSN-HydroCel-129` template. QC remains a review prompt: it creates no automatic
+channel, segment, or ICA decisions.
+
+The controlled human-review pack expands every temporal prompt into its own
+raw/filtered trace panel with montage-derived neighbours and a stable
+`candidate_id` link to the original decision row. It is evidence for review,
+not an automatic channel or segment decision, and remains non-public.
+
+Completed human channel and segment tables are finalized into an immutable
+bundle before any downstream use. The ICA consumer then expands reviewed
+exclusions by half the zero-phase FIR support, filters without carrying samples
+inside those intervals into neighbouring clean data, reconstructs Cz through
+average rereferencing, and creates a manual component-review package. This
+package includes clean-sample diagnostics and property plots for every
+component; missing EOG/ECG channels are reported as unavailable cues. This
+consumer, immutable component-decision step, reviewed ICA application,
+post-ICA interpolation, and condition epoch export are validated end to end on
+a deterministic synthetic BIDS/EEGLAB fixture. Repeated complete outputs are
+byte-identical under the pinned runtime. The real HBN recording has not been
+processed because its decision bundle is not final. In the controlled working
+copy, all 31 channel prompts and 46 of 49 segment prompts have been reviewed;
+the remaining three intervals require an independent check. These aggregate
+completion counts are not participant-level decisions and do not authorize ICA
+or preprocessing.
+The exact scope and commands are in
+[`docs/bids_eeglab_adapter.md`](docs/bids_eeglab_adapter.md).
+The [controlled review protocol](docs/human_review_protocol.md) defines the
+channel, interval and ICA decision semantics, including independent review and
+adjudication without changing the original reviewer tables.
+An optional local worksheet presents one prompt at a time, saves mutable
+browser progress and exports the two controlled TSV schemas. It makes no
+recommendation and never changes the immutable QC or review-pack evidence;
+only the separate finalizer can turn completed TSV files into a verified
+decision bundle.
+
+The manuscript-facing evidence boundary is recorded in the
+[validation matrix](docs/paper_validation_matrix.json), with a matching
+[Methods and Results scaffold](docs/manuscript_scaffold.md) and a
+[controlled manuscript draft](docs/manuscript_draft.md). These files keep
+synthetic known truth, controlled private execution, public participant QC and
+blocked real-data claims separate.
+The [publication-readiness checklist](docs/publication_readiness.md) records
+the exact remaining human, computational and approval gates.
+The [related-work note](docs/related_work.md) keeps the novelty claim separate
+from existing automated pipelines, interactive EEG QC systems and general
+computational-provenance frameworks.
 
 ## Reproducibility
 
@@ -292,6 +352,7 @@ page, and the code is released under the [MIT License](LICENSE).
 - **Evaluated:** controlled methods run on 10 private recordings, with verified participant and dataset provenance.
 - **Benchmark:** known-truth detection, BrainVision round trip, trial accounting,
   band-power preservation and C3/C4 task-signal preservation are implemented.
-- **Next:** define a provenance-bound segment-review input before any private
-  ICA rerun, then add one independent public stop-signal example.
+- **Next:** complete the controlled HBN channel and segment review, fit and
+  review the real ICA solution, and rerun preprocessing only after both
+  immutable decision gates pass.
 - **Not validated:** group analysis, exact original ICA choices, source localization, or generalization beyond the evaluated recordings.

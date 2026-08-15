@@ -57,6 +57,11 @@ class ICAConfig:
 def load_ica_config(path: Path = DEFAULT_ICA_CONFIG) -> ICAConfig:
     """Load the bounded ICA configuration used for review packages."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return _ica_config_from_payload(payload)
+
+
+def _ica_config_from_payload(payload: dict) -> ICAConfig:
+    """Validate an ICA configuration already captured from immutable bytes."""
     required = {
         "method",
         "fit_params",
@@ -245,7 +250,12 @@ def component_diagnostics(
     """Return review cues without converting them into removal decisions."""
     eog_scores = _target_scores(ica, raw, "EOG")
     ecg_scores = _target_scores(ica, raw, "ECG")
-    sources = ica.get_sources(raw).get_data()
+    source_raw = ica.get_sources(raw)
+    samples_total = int(source_raw.n_times)
+    sources = source_raw.get_data(reject_by_annotation="omit")
+    samples_used = int(sources.shape[1])
+    if samples_used <= 0:
+        raise ValueError("ICA diagnostics require samples outside BAD annotations")
     source_variance = np.var(sources, axis=1)
     variance_total = float(source_variance.sum())
     variance_fraction = (
@@ -266,6 +276,9 @@ def component_diagnostics(
                 "eog_correlation": eog,
                 "ecg_correlation": ecg,
                 "source_variance_fraction": float(variance_fraction[component]),
+                "variance_samples_used": samples_used,
+                "variance_samples_total": samples_total,
+                "variance_bad_samples_omitted": samples_total - samples_used,
                 "candidate_eog": candidate_eog,
                 "candidate_ecg": candidate_ecg,
                 "candidate_review": candidate_eog or candidate_ecg,
@@ -335,24 +348,20 @@ def save_review_figures(
             figure.savefig(path, dpi=140, bbox_inches="tight")
             plt.close(figure)
             paths.append(path.relative_to(output).as_posix())
-    candidates = (
-        diagnostics.loc[diagnostics["candidate_review"], "component"]
-        .astype(int)
-        .tolist()
+    components = list(range(ica.n_components_))
+    properties = ica.plot_properties(
+        raw,
+        picks=components,
+        psd_args={"fmax": 40.0},
+        reject_by_annotation=True,
+        show=False,
+        verbose="ERROR",
     )
-    if candidates:
-        properties = ica.plot_properties(
-            raw,
-            picks=candidates,
-            psd_args={"fmax": 40.0},
-            show=False,
-            verbose="ERROR",
-        )
-        for component, figure in zip(candidates, properties, strict=True):
-            path = figures / f"component-{component:03d}_properties.png"
-            figure.savefig(path, dpi=170, bbox_inches="tight")
-            plt.close(figure)
-            paths.append(path.relative_to(output).as_posix())
+    for component, figure in zip(components, properties, strict=True):
+        path = figures / f"component-{component:03d}_properties.png"
+        figure.savefig(path, dpi=170, bbox_inches="tight")
+        plt.close(figure)
+        paths.append(path.relative_to(output).as_posix())
     return paths
 
 
@@ -499,6 +508,22 @@ def load_ica_decisions(
 ) -> pd.DataFrame:
     """Require a complete, solution-bound decision for every ICA component."""
     table = pd.read_csv(path, dtype=str, keep_default_na=False)
+    return _validate_ica_decisions(
+        table,
+        participant_id=participant_id,
+        solution_sha256=solution_sha256,
+        components=components,
+    )
+
+
+def _validate_ica_decisions(
+    table: pd.DataFrame,
+    *,
+    participant_id: str,
+    solution_sha256: str,
+    components: int,
+) -> pd.DataFrame:
+    """Validate an ICA decision table already captured from immutable bytes."""
     missing = sorted(set(ICA_DECISION_COLUMNS) - set(table.columns))
     if missing:
         raise ValueError("ICA decision table is missing columns: " + ", ".join(missing))
