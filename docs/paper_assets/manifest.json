@@ -1,0 +1,29 @@
+{
+  "builder": {
+    "path": "scripts/build_paper_assets.py",
+    "sha256": "cceafa88034bcff4ea1d3a5296869dedd89622500d6c7f7fd119a4e902fde053"
+  },
+  "outputs": [
+    {
+      "path": "figures/synthetic_qc_validation.svg",
+      "sha256": "d204234cc19051e2caba4b190bdc60d2a00c71b99296bf5f975e0af2cb92a980",
+      "size_bytes": 6118
+    },
+    {
+      "path": "tables/synthetic_ica_validation.csv",
+      "sha256": "7cd3a82d2612281b4ba5576c499ade72a105748881f824bb2de93db07709eee7",
+      "size_bytes": 800
+    },
+    {
+      "path": "tables/synthetic_qc_validation.csv",
+      "sha256": "aa5ed36671ad1bf917487c3da76699bdbdfbd7e5607b436936caf473a132ff4e",
+      "size_bytes": 1856
+    }
+  ],
+  "schema_version": "1",
+  "scope": "Public aggregate synthetic manuscript assets only.",
+  "sources": {
+    "docs/benchmark_results/heldout_seed_summary.json": "7db079b4a7b3e26a51d4e8a10d2ee53dc486a1b617de0cc3ec985f22c59d76cb",
+    "docs/benchmark_results/ica_seed_4401_summary.json": "3aaec94231260a73c87dc3cf43ee469d25bdacea0d595cad5b841763261fe44f"
+  }
+}

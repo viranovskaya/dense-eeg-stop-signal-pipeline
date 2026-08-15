@@ -34,8 +34,10 @@ from hunt_eeg.provenance import verify_provenance
 class _Sources:
     def __init__(self, data: np.ndarray):
         self._data = data
+        self.n_times = data.shape[1]
 
-    def get_data(self) -> np.ndarray:
+    def get_data(self, reject_by_annotation=None) -> np.ndarray:
+        del reject_by_annotation
         return self._data
 
 
@@ -142,6 +144,44 @@ class ICAWorkflowTests(unittest.TestCase):
         self.assertEqual(diagnostics["candidate_review"].tolist(), [False, True, True])
         self.assertFalse(diagnostics["automatic_exclusion"].any())
         self.assertAlmostEqual(diagnostics["source_variance_fraction"].sum(), 1.0)
+
+    def test_diagnostic_variance_omits_bad_annotation_samples(self):
+        time = np.arange(100)
+        source_data = np.vstack(
+            [
+                np.sin(time / 5.0),
+                2.0 * np.cos(time / 7.0),
+            ]
+        )
+        source_data[0, :50] += 1000.0
+        sources = mne.io.RawArray(
+            source_data,
+            mne.create_info(["ICA000", "ICA001"], 100.0, "misc"),
+            verbose="ERROR",
+        )
+        sources.set_annotations(mne.Annotations([0.0], [0.5], ["BAD_review_ica"]))
+        fake = _FakeICA()
+        fake.n_components_ = 2
+        fake.get_sources = lambda raw: sources
+        input_raw = mne.io.RawArray(
+            np.zeros((2, 100)),
+            mne.create_info(["F3", "F4"], 100.0, "eeg"),
+            verbose="ERROR",
+        )
+
+        diagnostics = component_diagnostics(fake, input_raw, load_ica_config())
+
+        retained = source_data[:, 50:]
+        expected = np.var(retained, axis=1)
+        expected /= expected.sum()
+        np.testing.assert_allclose(
+            diagnostics["source_variance_fraction"], expected, rtol=1e-12
+        )
+        self.assertEqual(diagnostics["variance_samples_used"].unique().tolist(), [50])
+        self.assertEqual(diagnostics["variance_samples_total"].unique().tolist(), [100])
+        self.assertEqual(
+            diagnostics["variance_bad_samples_omitted"].unique().tolist(), [50]
+        )
 
     def test_extended_infomax_fit_uses_reviewed_good_eeg_rank(self):
         sfreq = 100.0

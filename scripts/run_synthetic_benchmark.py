@@ -197,9 +197,17 @@ def main() -> None:
                 "temporal_precision": result["temporal_detection"]["precision"],
                 "temporal_recall": result["temporal_detection"]["recall"],
                 "temporal_f1": result["temporal_detection"]["f1"],
+                "temporal_true_positive": result["temporal_detection"]["true_positive"],
+                "temporal_false_positive": result["temporal_detection"]["false_positive"],
+                "temporal_false_negative": result["temporal_detection"]["false_negative"],
+                "temporal_true_negative": result["temporal_detection"]["true_negative"],
                 "temporal_primary_precision": result["primary_detection"]["precision"],
                 "temporal_primary_recall": result["primary_detection"]["recall"],
                 "temporal_primary_f1": result["primary_detection"]["f1"],
+                "temporal_primary_true_positive": result["primary_detection"]["true_positive"],
+                "temporal_primary_false_positive": result["primary_detection"]["false_positive"],
+                "temporal_primary_false_negative": result["primary_detection"]["false_negative"],
+                "temporal_primary_true_negative": result["primary_detection"]["true_negative"],
                 "temporal_stress_detection_rate": result["stress_detection_rate"],
                 "line_noise_precision": result["line_noise_detection"]["precision"],
                 "line_noise_recall": result["line_noise_detection"]["recall"],
@@ -268,12 +276,28 @@ def main() -> None:
                 ),
             },
             "temporal_detection": {
-                column: float(summary[f"temporal_{column}"].mean())
-                for column in ("precision", "recall", "f1")
+                **{
+                    column: int(summary[f"temporal_{column}"].sum())
+                    for column in (
+                        "true_positive", "false_positive", "false_negative", "true_negative"
+                    )
+                },
+                **{
+                    column: float(summary[f"temporal_{column}"].mean())
+                    for column in ("precision", "recall", "f1")
+                },
             },
             "temporal_primary_detection": {
-                column: float(summary[f"temporal_primary_{column}"].mean())
-                for column in ("precision", "recall", "f1")
+                **{
+                    column: int(summary[f"temporal_primary_{column}"].sum())
+                    for column in (
+                        "true_positive", "false_positive", "false_negative", "true_negative"
+                    )
+                },
+                **{
+                    column: float(summary[f"temporal_primary_{column}"].mean())
+                    for column in ("precision", "recall", "f1")
+                },
             },
             "temporal_stress_detection_rate": float(
                 summary["temporal_stress_detection_rate"].mean()

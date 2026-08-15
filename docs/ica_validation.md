@@ -66,3 +66,5 @@ validation, an estimate of sensitivity or specificity, or evidence that the
 same decisions should be made in another recording. The exact machine-readable
 result is in
 [`benchmark_results/ica_seed_4401_summary.json`](benchmark_results/ica_seed_4401_summary.json).
+The tracked [tidy aggregate table](paper_assets/tables/synthetic_ica_validation.csv) is
+generated from that summary with `scripts/build_paper_assets.py`.

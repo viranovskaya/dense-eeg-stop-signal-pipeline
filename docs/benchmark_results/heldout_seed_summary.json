@@ -64,16 +64,24 @@
     "maximum_amplitude_error_uv": 2.4760088951576984,
     "maximum_latency_error_ms": 0.0
   },
-  "source_manifest_sha256": "aa7f50a06fec5ba89faf3bcbac1b13e0461aba9fe8dac86289e20da662e51979",
+  "source_manifest_sha256": "f7c7175967552c18dd15cbc07a752b217d2df9d94f95518923c3fdf0aabc629e",
   "temporal_detection": {
     "f1": 0.9629629629629631,
+    "false_negative": 3,
+    "false_positive": 0,
     "precision": 1.0,
-    "recall": 0.9285714285714285
+    "recall": 0.9285714285714285,
+    "true_negative": 3366,
+    "true_positive": 39
   },
   "temporal_primary_detection": {
     "f1": 1.0,
+    "false_negative": 0,
+    "false_positive": 0,
     "precision": 1.0,
-    "recall": 1.0
+    "recall": 1.0,
+    "true_negative": 3366,
+    "true_positive": 39
   },
   "temporal_stress_detection_rate": 0.0
 }

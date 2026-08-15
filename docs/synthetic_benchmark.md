@@ -94,3 +94,8 @@ metrics, aggregate summaries, a source-bound provenance record and one
 BrainVision round-trip example. The provenance record binds the exact output
 set, sizes, SHA-256 hashes, Python and package versions, and dependency-file
 hashes. It is verified before the atomic publish. The output path must be new.
+
+The tracked [vector validation figure](paper_assets/figures/synthetic_qc_validation.svg) and
+[tidy aggregate table](paper_assets/tables/synthetic_qc_validation.csv) are generated from
+the held-out summary with `scripts/build_paper_assets.py`. The figure keeps the
+stress-inclusive miss and all preservation subsets visible.

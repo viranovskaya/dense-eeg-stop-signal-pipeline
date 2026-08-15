@@ -1,0 +1,73 @@
+{
+  "schema_version": "1",
+  "dataset": {
+    "accession": "ds005508",
+    "snapshot": "1.0.1",
+    "name": "Healthy Brain Network (HBN) EEG - Release 4"
+  },
+  "task": "contrastChangeDetection",
+  "recording": {
+    "participant_id": "NDARMJ495DE0",
+    "run": "1"
+  },
+  "expected": {
+    "sampling_frequency_hz": 500.0,
+    "eeg_channel_count": 129,
+    "reference": "Cz",
+    "power_line_frequency_hz": 60.0,
+    "channel_unit": "uV",
+    "minimum_positioned_channels": 129
+  },
+  "reference_channel": {
+    "name": "Cz",
+    "must_be_flat": true,
+    "exclude_from_qc": true,
+    "exclude_from_reference_average": false,
+    "post_reference_policy": "include_flat_online_reference_in_average_transform"
+  },
+  "processing": {
+    "filter_hz": [1.0, 40.0],
+    "filter_method": "firwin_zero_phase_hamming",
+    "segment_guard": "half_filter_support",
+    "average_reference": "all_good_eeg_including_flat_online_reference"
+  },
+  "geometry_validation": {
+    "standard_montage": "GSN-HydroCel-129",
+    "maximum_similarity_rmse_mm": 0.1,
+    "minimum_pairwise_distance_correlation": 0.9999
+  },
+  "qc": {
+    "screen_filter_hz": [1.0, 40.0],
+    "full_recording_window_seconds": 20.0,
+    "robust_z_threshold": 5.0,
+    "flat_fraction_threshold": 0.1,
+    "line_noise_ratio_db_threshold": 20.0
+  },
+  "events": {
+    "alignment_tolerance_samples": 0.0,
+    "epoch_definitions": {
+      "left_target": {
+        "purpose": "qc_candidate",
+        "window_seconds": [-0.2, 0.8],
+        "baseline_seconds": [-0.2, 0.0],
+        "minimum_count": 1
+      },
+      "right_target": {
+        "purpose": "qc_candidate",
+        "window_seconds": [-0.2, 0.8],
+        "baseline_seconds": [-0.2, 0.0],
+        "minimum_count": 1
+      }
+    },
+    "context_values": {
+      "contrastChangeB1_start": "Task-block onset retained for accounting.",
+      "contrastTrial_start": "Trial-boundary marker retained for accounting.",
+      "left_buttonPress": "Participant response retained for behavioral accounting.",
+      "right_buttonPress": "Participant response retained for behavioral accounting."
+    },
+    "excluded_values": {
+      "break cnt": "Administrative recording marker; not an analysis event.",
+      "9999": "Undocumented terminal marker; retained for accounting and excluded from analysis."
+    }
+  }
+}

@@ -1,0 +1,19 @@
+panel,group,metric,value,display_value,unit,fixture_count,evaluation_pairs,truth_positives,true_positives,false_positives,false_negatives,channels_or_values_aggregated
+temporal_detection,primary,precision,1.0,1.000,proportion,3,3405,39,39,0,0,
+temporal_detection,stress_inclusive,precision,1.0,1.000,proportion,3,3408,42,39,0,3,
+temporal_detection,primary,recall,1.0,1.000,proportion,3,3405,39,39,0,0,
+temporal_detection,stress_inclusive,recall,0.9285714285714285,0.929,proportion,3,3408,42,39,0,3,
+temporal_detection,primary,f1,1.0,1.000,proportion,3,3405,39,39,0,0,
+temporal_detection,stress_inclusive,f1,0.9629629629629631,0.963,proportion,3,3408,42,39,0,3,
+band_power_preservation,unaffected,median,0.012311331540382773,0.012,dB absolute error,3,,,,,,1464
+band_power_preservation,unaffected,p95,0.09183949668202127,0.092,dB absolute error,3,,,,,,1464
+band_power_preservation,unaffected,maximum,0.1405555438701308,0.141,dB absolute error,3,,,,,,1464
+band_power_preservation,oracle_interpolated,median,6.449938450107913,6.450,dB absolute error,3,,,,,,24
+band_power_preservation,oracle_interpolated,p95,12.750771321293634,12.751,dB absolute error,3,,,,,,24
+band_power_preservation,oracle_interpolated,maximum,16.79767755238823,16.798,dB absolute error,3,,,,,,24
+band_power_preservation,other_corrupted,median,0.058185529057303065,0.058,dB absolute error,3,,,,,,36
+band_power_preservation,other_corrupted,p95,23.29304591896593,23.293,dB absolute error,3,,,,,,36
+band_power_preservation,other_corrupted,maximum,23.774316850894763,23.774,dB absolute error,3,,,,,,36
+band_power_preservation,all_values,median,0.013356108976722873,0.013,dB absolute error,3,,,,,,1524
+band_power_preservation,all_values,p95,0.1003052631065276,0.100,dB absolute error,3,,,,,,1524
+band_power_preservation,all_values,maximum,23.774316850894763,23.774,dB absolute error,3,,,,,,1524

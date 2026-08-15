@@ -259,9 +259,14 @@ def verify_input_sources(vhdr: Path, expected: list[dict]) -> None:
 
 def verify_provenance(output: Path) -> dict:
     """Verify a run core and every output declared by its provenance record."""
-    output = Path(output).resolve()
+    lexical_output = Path(output).expanduser().absolute()
+    if lexical_output.is_symlink():
+        raise ValueError("Unsafe provenance output root symlink")
+    output = lexical_output.resolve()
     path = output / "provenance.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
+    if any(candidate.is_symlink() for candidate in output.rglob("*")):
+        raise ValueError("Unsafe provenance output symlink")
     core = {
         key: value
         for key, value in payload.items()
