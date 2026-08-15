@@ -28,13 +28,18 @@ def _load_builder():
     return module
 
 
+def _physical_temp_root() -> Path:
+    """Return the platform temp directory without symlinked ancestry."""
+    return Path(tempfile.gettempdir()).resolve(strict=True)
+
+
 class PaperAssetTests(unittest.TestCase):
     def test_tracked_assets_are_reproduced_exactly(self):
         builder = _load_builder()
         tracked_package = PROJECT_ROOT / "docs" / "paper_assets"
         tracked_manifest_path = tracked_package / "manifest.json"
         tracked_manifest = json.loads(tracked_manifest_path.read_text(encoding="utf-8"))
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             output_package = Path(directory) / "paper_assets"
             generated_manifest = builder.build_assets(output_package)
             self.assertEqual(generated_manifest, tracked_manifest)
@@ -118,7 +123,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_repository_sources_reject_unsafe_and_symlinked_paths(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             root = Path(directory)
             (root / "real.json").write_text("{}\n", encoding="utf-8")
             with self.assertRaises(ValueError):
@@ -145,7 +150,7 @@ class PaperAssetTests(unittest.TestCase):
                 raise ValueError("simulated source drift")
             return original(capture)
 
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             parent = Path(directory)
             output = parent / "paper_assets"
             with mock.patch.object(builder, "_verify_capture", side_effect=fail_after_generation):
@@ -156,7 +161,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_output_parent_symlink_is_rejected(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             root = Path(directory)
             real = root / "real"
             real.mkdir()
@@ -169,7 +174,7 @@ class PaperAssetTests(unittest.TestCase):
         builder = _load_builder()
         tracked = PROJECT_ROOT / "docs" / "paper_assets"
         manifest = json.loads((tracked / "manifest.json").read_text())
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             copy = Path(directory) / "paper_assets"
             shutil.copytree(tracked, copy)
             target = copy / manifest["outputs"][0]["path"]
@@ -179,7 +184,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_interrupt_and_failed_temporary_verification_leave_no_package(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             parent = Path(directory)
             output = parent / "paper_assets"
             with mock.patch.object(builder, "_write_bytes_at", side_effect=KeyboardInterrupt):
@@ -200,7 +205,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_existing_package_is_never_replaced(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             output = Path(directory) / "paper_assets"
             output.mkdir()
             marker = output / "owner.txt"
@@ -211,7 +216,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_publish_race_never_replaces_or_removes_foreign_package(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             output = Path(directory) / "paper_assets"
 
             def lose_publish_race(parent_fd, source, destination):
@@ -243,7 +248,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_parent_replacement_cannot_redirect_publication(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             root = Path(directory)
             parent = root / "parent"
             parent.mkdir()
@@ -268,7 +273,7 @@ class PaperAssetTests(unittest.TestCase):
 
     def test_cleanup_does_not_enter_replacement_directory(self):
         builder = _load_builder()
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+        with tempfile.TemporaryDirectory(dir=_physical_temp_root()) as directory:
             parent = Path(directory)
             victim = parent / "victim"
             victim.mkdir()
