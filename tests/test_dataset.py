@@ -11,11 +11,21 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from hunt_eeg.dataset import build_dataset_aggregate
+from run_dataset_preprocess import package_participant_id
 
 
 class DatasetAccountingTests(unittest.TestCase):
+    def test_published_participant_directory_has_exact_fixed_study_id(self):
+        self.assertEqual(package_participant_id(Path("sub-901")), "901")
+        for name in ("901", "sub-91", "sub-901-extra"):
+            with self.subTest(name=name), self.assertRaisesRegex(
+                ValueError, "Invalid participant package directory"
+            ):
+                package_participant_id(Path(name))
+
     def test_trials_epochs_decisions_and_qc_are_aggregated(self):
         table = pd.DataFrame(
             [

@@ -30,8 +30,10 @@ ground truth.
   must be reassessed before applying the workflow to a new dataset.
 - `low`, `medium`, and `high` describe confidence in a reconstruction rule.
   They are qualitative evidence labels, not probabilities or model scores.
-- Stop-signal-locked C3/C4 plots are shown without baseline correction because
-  the pre-stop interval can contain the go stimulus.
+- Exploratory stop-signal-locked C3/C4 QC plots are shown without baseline
+  correction because the pre-stop interval can contain the go stimulus. The
+  fixed FC1/FC2/FCz endpoint instead uses each trial's 200 ms pre-go baseline,
+  located from the observed stimulus-to-stop-signal delay.
 - Five representative windows are used only for compact overview figures.
   Channel review candidates also come from a non-overlapping 20-second scan
   covering every recorded sample, including the final partial window.
@@ -40,14 +42,36 @@ ground truth.
   a channel or reject an epoch automatically.
 - ICA is fitted only to reviewed good EEG channels after the 1--40 Hz filter
   and EEG-only average reference. EOG and ECG remain available as diagnostic
-  targets during review. Reviewed ICA decisions are applied before bad-channel
-  interpolation and the final average reference.
-- Component correlations are screening cues, not artifact labels. Every
-  component must receive an explicit `keep` or `exclude` decision supported by
-  a topography, time-course, spectrum or auxiliary-channel observation.
+  targets during review.
+- The reviewed ICA solution is applied to the 0.2--30 Hz ERP stream before
+  bad-channel interpolation and the final average reference.
+- Component correlations and single summary measures are screening cues, not
+  artifact labels. Every component must receive an explicit `keep` or
+  `exclude` decision based on convergent evidence from its topography,
+  activation time course, spectrum and, when available, auxiliary-channel
+  relationship. A raised 20--40 Hz fraction alone is insufficient to label a
+  component as muscle: that interpretation also requires a compatible
+  peripheral or focal, spatially non-smooth projection and temporal behavior.
+  In the absence of EOG or ECG evidence, a component is not labelled ocular or
+  cardiac from its map alone. An unresolved component is retained in the
+  primary branch and may be excluded only in a clearly labelled sensitivity
+  branch.
+- A manual re-review performed after downstream results have been inspected may
+  confirm a frozen decision. If it changes a decision, the changed version is
+  post hoc and must be reported as a sensitivity analysis; it cannot silently
+  replace the frozen primary preprocessing branch.
 - Existing `BAD_*` annotations are excluded from the ICA fit. Temporal QC
-  windows are not converted into segment exclusions automatically; a private
-  rerun remains gated on an explicit, provenance-bound segment review.
+  windows are not converted into segment exclusions automatically. The fixed
+  study requires an explicit, provenance-bound interval table. A local
+  transient can be omitted from ICA fitting, task epochs, or both without
+  turning its channel into a persistent interpolation decision.
+- Reviewed interval bounds are expanded by half the exact zero-phase FIR
+  support for the relevant stream. Every epoch overlapping a guarded exclusion
+  is dropped, including overlap in its baseline or measurement window. The
+  original and applied bounds remain separate in provenance and lineage.
+- A participant with no temporal exclusions still has one explicit completed
+  `none` row. Missing reviews, unknown participants, overlaps or changed table
+  bytes stop the fixed-study run.
 - The decision table is bound to the exact ICA solution by SHA-256. A partial
   table, a changed solution or an unreviewed component stops preprocessing.
 

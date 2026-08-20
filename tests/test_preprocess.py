@@ -20,6 +20,7 @@ import pandas as pd
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from hunt_eeg.preprocess import _event_array, preprocess_recording
+from hunt_eeg.fixed_study_intervals import load_fixed_study_interval_manifest
 
 
 def synthetic_recording() -> mne.io.RawArray:
@@ -187,6 +188,31 @@ class PreprocessingTests(unittest.TestCase):
             self.assertFalse(output.exists())
             self.assertEqual(list(root.glob(".processed.tmp-*")), [])
 
+    def test_unverified_temporary_package_is_never_published(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = brainvision_stub(root)
+            output = root / "processed"
+            with (
+                patch(
+                    "hunt_eeg.preprocess._read_brainvision_compat",
+                    return_value=synthetic_recording(),
+                ),
+                patch(
+                    "hunt_eeg.preprocess.verify_provenance",
+                    side_effect=ValueError("verification failed"),
+                ),
+                self.assertRaisesRegex(ValueError, "verification failed"),
+            ):
+                preprocess_recording(
+                    header,
+                    output,
+                    participant_id="test",
+                    export_eeglab=False,
+                )
+            self.assertFalse(output.exists())
+            self.assertEqual(list(root.glob(".processed.tmp-*")), [])
+
     def test_ica_solution_and_decisions_are_required_together(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -258,7 +284,7 @@ class PreprocessingTests(unittest.TestCase):
                 )
 
             continuous = mne.io.read_raw_fif(
-                output / "sub-test_continuous_1-40Hz_avgref_raw.fif",
+                output / "sub-test_continuous_0.2-30Hz_avgref_raw.fif",
                 preload=False,
                 verbose="ERROR",
             )
@@ -331,13 +357,15 @@ class PreprocessingTests(unittest.TestCase):
             self.assertTrue(summary["go_epoch_accounting"]["accounting_complete"])
 
             continuous = mne.io.read_raw_fif(
-                output / "sub-test_continuous_1-40Hz_avgref_raw.fif",
+                output / "sub-test_continuous_0.2-30Hz_avgref_raw.fif",
                 preload=True,
                 verbose="ERROR",
             )
             self.assertNotIn("ECG", continuous.ch_names)
             self.assertEqual(continuous.get_channel_types(picks=["EOG"]), ["eog"])
             self.assertEqual(continuous.info["bads"], [])
+            self.assertAlmostEqual(continuous.info["highpass"], 0.2)
+            self.assertAlmostEqual(continuous.info["lowpass"], 30.0)
             eeg = continuous.get_data(picks="eeg")
             self.assertTrue(np.allclose(eeg.mean(axis=0), 0.0, atol=1e-10))
 
@@ -357,7 +385,7 @@ class PreprocessingTests(unittest.TestCase):
             self.assertIn("trial_index", go_epochs.metadata.columns)
 
             for filename in [
-                "sub-test_continuous_1-40Hz_avgref.set",
+                "sub-test_continuous_0.2-30Hz_avgref.set",
                 "sub-test_go.set",
                 "sub-test_stop.set",
                 "figures/c3_c4_go_lowpass12.png",
@@ -416,6 +444,61 @@ class PreprocessingTests(unittest.TestCase):
         self.assertEqual(
             summary["go_epoch_accounting"]["drop_reasons"],
             {"BAD_S17_motion": 1},
+        )
+
+    def test_reviewed_interval_and_fir_support_drop_every_overlapping_epoch(self):
+        raw = synthetic_recording()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = brainvision_stub(root)
+            interval_path = root / "fixed_intervals.csv"
+            interval_path.write_text(
+                "participant_id,interval_id,decision,start_s,stop_s,scope,reason,reviewer,reviewed_at,evidence\n"
+                "test,artifact01,exclude,2.9,3.1,epochs,reviewed transient,reviewer,2026-08-18,raw zoom\n",
+                encoding="utf-8",
+            )
+            manifest = load_fixed_study_interval_manifest(interval_path)
+            output = root / "processed"
+            with patch(
+                "hunt_eeg.preprocess._read_brainvision_compat",
+                return_value=raw,
+            ):
+                summary = preprocess_recording(
+                    header,
+                    output,
+                    participant_id="test",
+                    interval_manifest=manifest,
+                    export_eeglab=False,
+                )
+            provenance = json.loads(
+                (output / "provenance.json").read_text(encoding="utf-8")
+            )
+            go_lineage = pd.read_csv(
+                output / "go_epoch_lineage.csv", keep_default_na=False
+            )
+
+        self.assertEqual(summary["go_epoch_accounting"]["retained_epochs"], 1)
+        self.assertEqual(summary["go_epoch_accounting"]["dropped_epochs"], 2)
+        self.assertEqual(summary["stop_epoch_accounting"]["retained_epochs"], 1)
+        self.assertEqual(summary["stop_epoch_accounting"]["dropped_epochs"], 1)
+        self.assertIn(
+            "BAD_fixed_epochs_artifact01",
+            summary["go_epoch_accounting"]["drop_reasons"],
+        )
+        self.assertEqual(
+            set(
+                go_lineage.loc[
+                    ~go_lineage["retained"], "reviewed_interval_reasons"
+                ]
+            ),
+            {"artifact01: reviewed transient"},
+        )
+        self.assertEqual(
+            provenance["interval_review"]["identity"]["manifest_sha256"],
+            manifest.sha256,
+        )
+        self.assertGreater(
+            summary["interval_review"]["fir_half_support_guard_s"], 8.0
         )
 
 

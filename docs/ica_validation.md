@@ -4,8 +4,10 @@
 
 This check asks whether the explicit ICA workflow can be completed from public
 BrainVision input through review, component decisions, preprocessing and a
-bounded before/after summary. It does not ask whether a correlation threshold
-can classify components automatically.
+bounded matched-control summary. The control output uses the same input,
+filter, reference, interval decisions, ICA solution and interpolation decisions
+but retains every ICA component. It does not ask whether a correlation
+threshold can classify components automatically.
 
 ## Fixture
 
@@ -34,32 +36,35 @@ Every component received an explicit `keep` or `exclude` decision. Component
 numbers are zero-based. The decision table was bound to the exact ICA solution
 SHA-256. The software did not make or apply an automatic exclusion.
 
-## Before/after checks
+## Matched-control checks
 
 Across all 127 EEG channels:
 
-| Check | Before | After |
+| Check | All components retained | Reviewed exclusions |
 | --- | ---: | ---: |
-| Maximum absolute EEG-EOG correlation | 0.295 | 0.028 |
-| Median absolute EEG-EOG correlation | 0.130 | 0.006 |
-| Maximum absolute EEG-ECG correlation | 0.176 | 0.049 |
-| Median absolute EEG-ECG correlation | 0.074 | 0.012 |
+| Maximum absolute EEG-EOG correlation | 0.358 | 0.071 |
+| Median absolute EEG-EOG correlation | 0.161 | 0.017 |
+| Maximum absolute EEG-ECG correlation | 0.158 | 0.043 |
+| Median absolute EEG-ECG correlation | 0.068 | 0.011 |
 
-The largest C3/C4 task-peak amplitude change was 0.230 µV and the largest
-peak-latency change was 0 ms. Across 508 channel-band values, the median
-absolute band-power change was 0.082 dB, the 95th percentile was 0.645 dB and
-the maximum was 0.994 dB.
+The task-peak and band-power values below compare those two otherwise matched
+outputs. They therefore isolate the effect of the reviewed component exclusions
+from the separate 1--40 Hz ICA-fit filter and 0.2--30 Hz ERP filter.
+
+The largest C3/C4 task-peak change was 0.200 µV, with no peak-latency shift.
+Across 508 channel-band values, the median absolute band-power change was
+0.082 dB, the 95th percentile was 0.649 dB and the maximum was 0.996 dB.
 
 Event accounting remained complete: 77 markers, 34 trial starts, 17 retained
 go epochs, 17 retained stop epochs and no dropped epochs.
 
 ## Interpretation
 
-The selected components carried strong auxiliary-channel relationships, and
-their reviewed removal reduced those relationships while leaving the declared
-C3/C4 peak timing unchanged and producing small-to-moderate spectral changes
-in this fixture. These checks are deliberately reported together: lower
-EOG/ECG correlation alone is not enough to claim successful cleaning.
+The selected components carried strong auxiliary-channel relationships. These
+checks are deliberately reported together: lower EOG/ECG correlation alone is
+not enough to claim successful cleaning, and preservation is evaluated against
+the matched all-components-retained control rather than against the differently
+filtered ICA-fit input.
 
 This is one fixed synthetic integration fixture. It is not participant-level
 validation, an estimate of sensitivity or specificity, or evidence that the

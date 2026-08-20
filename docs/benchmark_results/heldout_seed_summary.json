@@ -1,5 +1,5 @@
 {
-  "analysis_config_sha256": "413fb708bdfc324f6e79078d7a7083ac7b89f9cb1555f2ab30427b9c274ac4f3",
+  "analysis_config_sha256": "7bcd3d3060f08b77b3db261fd6f6243d8ad7658ee80be967213faa5a559f3374",
   "benchmark_config_sha256": "ffecdd25e277ad125a65f064e40b339bf7bf11b5a77e8547db736d1f8f791ffc",
   "evaluation_units_per_recording": {
     "primary_channel_windows": 1135,
@@ -64,7 +64,7 @@
     "maximum_amplitude_error_uv": 2.4760088951576984,
     "maximum_latency_error_ms": 0.0
   },
-  "source_manifest_sha256": "aa7f50a06fec5ba89faf3bcbac1b13e0461aba9fe8dac86289e20da662e51979",
+  "source_manifest_sha256": "1421774546e2d7c26cbb52af0d6eb8e76afd9a4f5fb92210b7510a650472ff28",
   "temporal_detection": {
     "f1": 0.9629629629629631,
     "precision": 1.0,

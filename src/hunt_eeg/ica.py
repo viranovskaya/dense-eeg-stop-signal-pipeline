@@ -16,6 +16,11 @@ import numpy as np
 import pandas as pd
 
 from .config import DEFAULT_ANALYSIS_CONFIG, AnalysisConfig, load_analysis_config
+from .fixed_study_intervals import (
+    FixedStudyIntervalManifest,
+    apply_reviewed_intervals,
+    reviewed_interval_application,
+)
 from .provenance import (
     build_provenance_core,
     canonical_sha256,
@@ -134,6 +139,8 @@ def prepare_ica_input(
     vhdr: Path,
     bad_channel_decisions: list[dict],
     analysis: AnalysisConfig | None = None,
+    interval_manifest: FixedStudyIntervalManifest | None = None,
+    participant_id: str | None = None,
 ) -> mne.io.BaseRaw:
     """Load, type, filter and reference one recording for ICA fitting."""
     analysis = load_analysis_config() if analysis is None else analysis
@@ -152,7 +159,7 @@ def prepare_ica_input(
     )
     bads = _reviewed_bad_channels(bad_channel_decisions, raw)
     raw.load_data(verbose="ERROR")
-    low_hz, high_hz = analysis.filter_hz
+    low_hz, high_hz = analysis.ica_filter_hz
     if high_hz >= float(raw.info["sfreq"]) / 2:
         raise ValueError("ICA input filter must remain below the recording Nyquist")
     picks = mne.pick_types(raw.info, eeg=True, eog=True, ecg=False, exclude=[])
@@ -164,6 +171,18 @@ def prepare_ica_input(
         phase="zero",
         verbose="ERROR",
     )
+    if interval_manifest is not None:
+        if participant_id is None:
+            raise ValueError(
+                "Participant ID is required with a fixed-study interval manifest"
+            )
+        apply_reviewed_intervals(
+            raw,
+            interval_manifest,
+            participant_id=participant_id,
+            target="ica",
+            filter_hz=analysis.ica_filter_hz,
+        )
     raw.info["bads"] = bads
     raw.set_eeg_reference("average", projection=False, verbose="ERROR")
     return raw
@@ -361,6 +380,7 @@ def _run_ica_review_into(
     output: Path,
     participant_id: str,
     bad_channel_decisions: list[dict],
+    interval_manifest: FixedStudyIntervalManifest | None = None,
 ) -> dict:
     vhdr = Path(vhdr).expanduser().resolve()
     participant_id = _participant_id(participant_id)
@@ -386,10 +406,26 @@ def _run_ica_review_into(
         raise RuntimeError("ICA provenance source does not match the fitted source")
     if core["configuration"]["analysis_sha256"] != initial_analysis_sha256:
         raise RuntimeError("ICA provenance analysis config does not match the fit")
-    raw = prepare_ica_input(vhdr, bad_channel_decisions, analysis)
+    raw = prepare_ica_input(
+        vhdr,
+        bad_channel_decisions,
+        analysis,
+        interval_manifest=interval_manifest,
+        participant_id=participant_id,
+    )
     core_without_hash = {
         key: value for key, value in core.items() if key != "core_sha256"
     }
+    if interval_manifest is not None:
+        interval_application = reviewed_interval_application(
+            interval_manifest,
+            participant_id=participant_id,
+            target="ica",
+            filter_hz=analysis.ica_filter_hz,
+            sfreq=float(raw.info["sfreq"]),
+            duration_s=float(raw.n_times) / float(raw.info["sfreq"]),
+        )
+        core_without_hash["interval_review"] = interval_application
     core_without_hash["workflow"] = "ica_component_review"
     core_without_hash["ica_configuration"] = {
         "config_sha256": initial_ica_sha256,
@@ -434,6 +470,10 @@ def _run_ica_review_into(
         "review_figures": figure_paths,
         "automatic_exclusion": False,
         "decision_status": "pending explicit keep/exclude decision for every component",
+        "interval_review": core.get(
+            "interval_review",
+            {"status": "not provided; not a complete fixed-study run"},
+        ),
         "privacy": "Private derived output; review before sharing or publishing.",
     }
     (output / "ica_review_summary.json").write_text(
@@ -457,6 +497,8 @@ def _run_ica_review_into(
         or source_manifest()["sha256"] != initial_source["sha256"]
     ):
         raise RuntimeError("ICA source or configuration changed during the run")
+    if interval_manifest is not None:
+        interval_manifest.verify_unchanged()
     write_provenance(output, core)
     verify_provenance(output)
     return summary
@@ -467,6 +509,7 @@ def run_ica_review(
     output: Path,
     participant_id: str,
     bad_channel_decisions: list[dict],
+    interval_manifest: FixedStudyIntervalManifest | None = None,
 ) -> dict:
     """Create one private ICA review package atomically in a new directory."""
     output = Path(output).expanduser().resolve()
@@ -481,9 +524,19 @@ def run_ica_review(
             output=temporary,
             participant_id=participant_id,
             bad_channel_decisions=bad_channel_decisions,
+            interval_manifest=interval_manifest,
         )
         verify_provenance(temporary)
+        if interval_manifest is not None:
+            interval_manifest.verify_unchanged()
         temporary.replace(output)
+        try:
+            verify_provenance(output)
+            if interval_manifest is not None:
+                interval_manifest.verify_unchanged()
+        except Exception:
+            shutil.rmtree(output, ignore_errors=True)
+            raise
         return summary
     except Exception:
         shutil.rmtree(temporary, ignore_errors=True)
@@ -567,6 +620,13 @@ def apply_reviewed_ica(
         .get("source_manifest", {})
         .get("sha256"),
     }
+    if (
+        "interval_review_identity" in expected_context
+        or "interval_review" in review_payload
+    ):
+        context_checks["interval_review_identity"] = review_payload.get(
+            "interval_review", {}
+        ).get("identity")
     if context_checks != expected_context:
         raise ValueError(
             "ICA review package does not match the current input, configuration, "

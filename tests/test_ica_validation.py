@@ -18,6 +18,7 @@ from hunt_eeg.ica_validation import (
     auxiliary_correlation_summary,
     signal_preservation_summary,
     verified_fixture_seed,
+    verify_matched_ica_processing,
     verify_validation_context,
 )
 
@@ -84,6 +85,7 @@ class ICAValidationTests(unittest.TestCase):
             verify_validation_context(
                 review,
                 processed,
+                processed,
                 current_source_manifest_sha256="current",
                 analysis_config_sha256="analysis",
                 ica_config_sha256="ica",
@@ -91,14 +93,14 @@ class ICAValidationTests(unittest.TestCase):
 
     def test_auxiliary_correlations_report_reduction(self):
         reference, observed = validation_recordings()
-        summary = auxiliary_correlation_summary(reference, observed)
+        summary = auxiliary_correlation_summary(reference, observed, reference)
         self.assertLess(
-            summary["eog"]["maximum_absolute_correlation_after"],
-            summary["eog"]["maximum_absolute_correlation_before"],
+            summary["eog"]["maximum_absolute_correlation_reviewed"],
+            summary["eog"]["maximum_absolute_correlation_control"],
         )
         self.assertLess(
-            summary["ecg"]["maximum_absolute_correlation_after"],
-            summary["ecg"]["maximum_absolute_correlation_before"],
+            summary["ecg"]["maximum_absolute_correlation_reviewed"],
+            summary["ecg"]["maximum_absolute_correlation_control"],
         )
 
     def test_signal_preservation_keeps_denominators_visible(self):
@@ -123,9 +125,74 @@ class ICAValidationTests(unittest.TestCase):
         verify_validation_context(
             review,
             processed,
+            processed,
             current_source_manifest_sha256="source",
             analysis_config_sha256="analysis",
             ica_config_sha256="ica",
+        )
+
+    def test_matched_processing_rejects_nonempty_control_exclusions(self):
+        shared = {
+            "participant_id": "synthetic",
+            "inputs": [{"role": "raw", "sha256": "input"}],
+            "configuration": {"analysis_sha256": "analysis"},
+            "bad_channel_decisions": [{"decision": "none"}],
+            "interval_review": {"complete": True},
+            "software": {"source_manifest": {"sha256": "source"}},
+            "ica_inputs": {
+                "solution_sha256": "solution",
+                "review_provenance_sha256": "review",
+                "decision_table_sha256": "control-decisions",
+                "automatic_exclusion": False,
+            },
+        }
+        reviewed = {
+            **shared,
+            "ica_inputs": {
+                **shared["ica_inputs"],
+                "decision_table_sha256": "reviewed-decisions",
+            },
+        }
+        control_summary = {
+            "participant_id": "synthetic",
+            "erp_filter_hz": [0.2, 30.0],
+            "reference": "average EEG only",
+            "interpolated_bad_channels": [],
+            "trial_reconciliation": {"accounting_complete": True},
+            "go_epoch_accounting": {"retained_epochs": 1},
+            "stop_epoch_accounting": {"retained_epochs": 1},
+            "interval_review": {"complete": True},
+            "ica": {
+                "components": 2,
+                "excluded_components": [0],
+                "decision_record_complete": True,
+                "solution_sha256": "solution",
+                "decision_table_sha256": "control-decisions",
+            },
+        }
+        reviewed_summary = {
+            **control_summary,
+            "ica": {
+                "components": 2,
+                "excluded_components": [1],
+                "decision_record_complete": True,
+                "solution_sha256": "solution",
+                "decision_table_sha256": "reviewed-decisions",
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "retain every component"):
+            verify_matched_ica_processing(
+                shared,
+                reviewed,
+                control_summary,
+                reviewed_summary,
+            )
+        control_summary["ica"]["excluded_components"] = []
+        verify_matched_ica_processing(
+            shared,
+            reviewed,
+            control_summary,
+            reviewed_summary,
         )
 
 

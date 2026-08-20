@@ -29,6 +29,8 @@ class ConfigurationTests(unittest.TestCase):
         codebook = load_event_codebook()
 
         self.assertEqual(analysis.filter_hz, (1.0, 40.0))
+        self.assertEqual(analysis.ica_filter_hz, (1.0, 40.0))
+        self.assertEqual(analysis.erp_filter_hz, (0.2, 30.0))
         self.assertEqual(analysis.qc.full_recording_window_seconds, 20.0)
         self.assertEqual(analysis.epochs_seconds["stop"], (-2.0, 2.0))
         self.assertEqual(

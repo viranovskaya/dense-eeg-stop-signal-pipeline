@@ -5,8 +5,10 @@
 ## Purpose
 
 This repository reconstructs the event logic and preprocessing history of
-129-channel BrainVision EEG recorded during a stop-signal task. The main aim is
-to make each trial classification and each new processing decision traceable.
+129-channel BrainVision EEG recorded during a previously reported stop-signal
+paradigm. The main aim is to make each trial classification and each new
+processing decision traceable. It is a software and reproducible-reanalysis
+project, not a release of a new EEG dataset.
 
 ## Practical problem
 
@@ -31,14 +33,17 @@ I implemented:
   codebook into each trial row; these are not calibrated probabilities;
 - trial and epoch accounting that keeps every detected trial start visible;
 - explicit reviewed bad-channel manifests before EEG interpolation;
+- explicit reviewed temporal exclusions for ICA fitting and task epochs;
 - rank-aware extended Infomax ICA with a separate private review package;
 - a solution-bound `keep` or `exclude` decision for every ICA component;
-- 1--40 Hz filtering and EEG-only average reference;
+- separate 1--40 Hz ICA-fit and 0.2--30 Hz final ERP streams with an
+  EEG-only average reference;
 - continuous, go-locked, and stop-locked FIF and EEGLAB exports;
 - targeted before/after screening metrics;
 - run provenance with input, configuration, source, decision, and output hashes;
 - trial-to-epoch lineage tables that retain classification and drop reasons;
 - low-pass C3/C4 ERP summaries as an initial signal check;
+- one fixed stop-signal ERP endpoint with exact trial-to-epoch lineage checks;
 - a public 127-channel corruption benchmark with known channel-window truth,
   held-out seeds, BrainVision round-trip checks, and separate detection and
   signal-preservation measures.
@@ -48,6 +53,8 @@ The recovered marker logic is documented in
 and evidence boundary are in [`docs/methods_scope.md`](docs/methods_scope.md).
 The component-review order and decision contract are described in
 [`docs/ica_workflow.md`](docs/ica_workflow.md).
+The fixed-study temporal decision table is defined in
+[`docs/fixed_study_intervals.md`](docs/fixed_study_intervals.md).
 The public ICA integration check is reported in
 [`docs/ica_validation.md`](docs/ica_validation.md).
 
@@ -58,6 +65,14 @@ The methods-evaluation workflow was rerun in a controlled local environment on
 All 10 recordings produced provenance-verified participant outputs and a
 dataset-level aggregate. Participant data, channel decisions, and generated
 reports are not tracked in this repository.
+
+The experimental paradigm was described previously by Savostyanov et al.
+([2021](https://doi.org/10.18699/VJ21.066)): a visual choice-response game with
+intermixed go and stop trials recorded with Brain Products EEG hardware. That
+paper provides historical study context; this repository contributes a new
+software implementation, explicit decision lineage, and a distinct controlled
+reanalysis. Previous publications using the same study lineage must be cited
+in any report based on these recordings.
 
 The public test data are a synthetic marker fixture. The available research material has no group labels, individual MRI, or digitized electrode positions.
 
@@ -116,11 +131,12 @@ after 530 iterations and estimated 126 components. Review identified one ocular
 and one cardiac component; all 126 components then received an explicit
 decision, and only those two were excluded.
 
-Across the 127 EEG channels, the maximum absolute EOG correlation fell from
-0.295 to 0.028 and the maximum absolute ECG correlation from 0.176 to 0.049.
-The largest C3/C4 task-peak change was 0.23 µV with no peak-latency shift. The
+Against an otherwise matched control output that retained every ICA component,
+the maximum absolute EOG correlation across the 127 EEG channels fell from
+0.358 to 0.071 and the maximum absolute ECG correlation from 0.158 to 0.043.
+The largest C3/C4 task-peak change was 0.20 µV with no peak-latency shift. The
 median absolute change across 508 channel-band values was 0.082 dB; the 95th
-percentile was 0.645 dB and the maximum was 0.994 dB. All 34 reconstructed
+percentile was 0.649 dB and the maximum was 0.996 dB. All 34 reconstructed
 trial starts were accounted for, with 17 go and 17 stop epochs retained and no
 epoch drops.
 
@@ -143,6 +159,11 @@ is provided in
 [`config/bad_channel_manifest_example.csv`](config/bad_channel_manifest_example.csv).
 If review finds no persistent bad channels, the manifest records one explicit
 participant-level `none` decision instead of silently omitting that recording.
+It also requires one completed fixed-study interval table. Each participant
+either has reviewed exclusions with an `ica`, `epochs` or `both` scope, or one
+explicit `none` row. Reviewed bounds are expanded by the half-support of the
+actual zero-phase FIR filter before omission. This prevents a visible transient
+or its filter response from entering the ICA fit, baseline or ERP window.
 The resulting `provenance.json` records SHA-256 digests without exposing source
 file names or absolute paths. It includes a deterministic manifest of the
 executable source, so a dirty working tree is not identified only by a Boolean.
@@ -201,6 +222,7 @@ python scripts/run_preprocess.py \
   --vhdr /path/to/sub-001_task-stop.vhdr \
   --participant-id 001 \
   --bad-channels CHAN1,CHAN2 \
+  --interval-manifest /private/path/fixed_study_intervals.csv \
   --output results/processed/sub-001
 ```
 
@@ -212,6 +234,7 @@ dataset-level methods run uses the full review manifest:
 python scripts/run_dataset_preprocess.py \
   --input-dir /path/to/brainvision \
   --bad-channel-manifest /path/to/bad_channel_decisions.csv \
+  --interval-manifest /private/path/fixed_study_intervals.csv \
   --output results/processed
 ```
 
@@ -231,6 +254,7 @@ python scripts/run_ica_review.py \
   --vhdr /path/to/sub-001_task-stop.vhdr \
   --participant 001 \
   --bad-channel-manifest /path/to/bad_channel_decisions.csv \
+  --interval-manifest /private/path/fixed_study_intervals.csv \
   --output /private/path/ica-review/sub-001
 ```
 
@@ -244,6 +268,7 @@ python scripts/run_preprocess.py \
   --vhdr /path/to/sub-001_task-stop.vhdr \
   --participant-id 001 \
   --bad-channel-manifest /path/to/bad_channel_decisions.csv \
+  --interval-manifest /private/path/fixed_study_intervals.csv \
   --ica-solution /private/path/ica-review/sub-001/ica_solution.fif \
   --ica-decisions /private/path/ica_decisions.csv \
   --output /private/path/processed/sub-001
@@ -261,6 +286,7 @@ python scripts/summarize_ica_validation.py \
   --vhdr /new/path/public-ica-fixture/synthetic_ica.vhdr \
   --review-package /private/path/ica-review/synthetic \
   --decisions /private/path/ica_decisions.csv \
+  --control-processed-output /private/path/processed/synthetic-all-components \
   --processed-output /private/path/processed/synthetic \
   --fixture-seed 4401 \
   --output /new/path/ica_validation_summary.json
@@ -271,6 +297,10 @@ Dataset-level commands are available in `scripts/run_dataset_qc.py` and
 [`matlab/preprocess_eeglab.m`](matlab/preprocess_eeglab.m) is a historical
 reference only; it is not equivalent to the current Python event and provenance
 logic.
+
+The fixed study endpoint and its interpretation limits are specified in
+[`docs/stop_signal_endpoint.md`](docs/stop_signal_endpoint.md). It is calculated
+only from a completed, provenance-verified dataset preprocessing output.
 
 The dataset preprocessing command also writes a participant table, an aggregate
 JSON report, and one before/after figure. These retain trial-status totals,
@@ -287,11 +317,17 @@ page, and the code is released under the [MIT License](LICENSE).
 
 ## Current status
 
-- **Implemented:** executable event definitions, conservative trial reconstruction, reconciliation, reviewed interpolation, filtering, rereferencing, explicit ICA review and decisions, epoching, provenance, and dual-format export.
-- **Tested:** synthetic marker, configuration, provenance, epoch-accounting, and preprocessing contracts in CI.
-- **Evaluated:** controlled methods run on 10 private recordings, with verified participant and dataset provenance.
+- **Implemented:** executable event definitions, conservative trial reconstruction, reconciliation, reviewed interpolation, reviewed temporal exclusions, filtering, rereferencing, explicit ICA review and decisions, epoching, provenance, and dual-format export.
+- **Tested:** synthetic marker, configuration, provenance, epoch-accounting,
+  preprocessing, and the complete ten-package endpoint command in the local
+  test suite. Repeated endpoint runs produce the same verified output bytes.
+- **Evaluated:** the frozen 0.2--30 Hz endpoint run is complete for all 10
+  controlled recordings, with verified participant, dataset and endpoint
+  provenance, two prespecified ICA sensitivities and a byte-exact endpoint
+  repeat. Participant-derived endpoint results are not included here.
 - **Benchmark:** known-truth detection, BrainVision round trip, trial accounting,
   band-power preservation and C3/C4 task-signal preservation are implemented.
-- **Next:** define a provenance-bound segment-review input before any private
-  ICA rerun, then add one independent public stop-signal example.
+- **Next:** preserve the controlled internal analysis package and maintain the
+  public repository as a tested software project. No journal submission or
+  participant-derived public result release is currently planned.
 - **Not validated:** group analysis, exact original ICA choices, source localization, or generalization beyond the evaluated recordings.

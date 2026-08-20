@@ -1,6 +1,8 @@
 {
   "line_frequency_hz": 50.0,
   "filter_hz": [1.0, 40.0],
+  "ica_filter_hz": [1.0, 40.0],
+  "erp_filter_hz": [0.2, 30.0],
   "montage": "standard_1005",
   "reference": "average EEG only",
   "channel_types": {

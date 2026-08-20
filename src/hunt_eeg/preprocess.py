@@ -14,7 +14,13 @@ import mne
 import numpy as np
 import pandas as pd
 
-from .config import AnalysisConfig, load_analysis_config, load_event_codebook
+from .config import (
+    DEFAULT_ANALYSIS_CONFIG,
+    DEFAULT_EVENT_CODEBOOK,
+    AnalysisConfig,
+    load_analysis_config,
+    load_event_codebook,
+)
 from .events import (
     annotations_to_markers,
     classify_trials,
@@ -22,11 +28,17 @@ from .events import (
     reconcile_trials,
 )
 from .ica import apply_reviewed_ica
+from .fixed_study_intervals import (
+    FixedStudyIntervalManifest,
+    apply_reviewed_intervals,
+)
 from .provenance import (
     build_provenance_core,
     canonical_sha256,
     sha256_file,
+    source_manifest,
     verify_input_sources,
+    verify_provenance,
     write_provenance,
 )
 from .qc import _channel_metrics, _read_brainvision_compat
@@ -55,6 +67,9 @@ def _event_array(raw: mne.io.BaseRaw, trials, onset_column: str, classes: list[s
                 "classification_confidence": trial.classification_confidence,
                 "classification_reason": trial.classification_reason,
                 "marker_sequence": trial.marker_sequence,
+                "stimulus_onset_s": trial.stimulus_onset_s,
+                "stop_signal_onset_s": trial.stop_signal_onset_s,
+                "stimulus_to_stop_signal_ms": trial.stimulus_to_stop_signal_ms,
             }
         )
     return (
@@ -119,6 +134,42 @@ def _epoch_accounting(
     return accounting, lineage
 
 
+def _add_reviewed_interval_reasons(
+    lineage: pd.DataFrame, interval_application: dict
+) -> pd.DataFrame:
+    """Resolve BAD annotation IDs back to their reviewed scientific reasons."""
+    reason_by_annotation = {
+        interval["annotation"]: (
+            f"{interval['interval_id']}: {interval['reason']}"
+        )
+        for interval in interval_application.get("applied_intervals", [])
+    }
+    enriched = lineage.copy()
+    enriched["reviewed_interval_reasons"] = [
+        ";".join(
+            reason_by_annotation[description]
+            for description in str(drop_reasons).split(";")
+            if description in reason_by_annotation
+        )
+        for drop_reasons in enriched["drop_reasons"]
+    ]
+    return enriched
+
+
+def _verify_execution_context(provenance_core: dict) -> None:
+    """Require the executable/configuration bytes used at run start to persist."""
+    if (
+        source_manifest()["sha256"]
+        != provenance_core["software"]["source_manifest"]["sha256"]
+    ):
+        raise RuntimeError("Executable source changed during preprocessing")
+    configuration = provenance_core["configuration"]
+    if sha256_file(DEFAULT_ANALYSIS_CONFIG) != configuration["analysis_sha256"]:
+        raise RuntimeError("Analysis configuration changed during preprocessing")
+    if sha256_file(DEFAULT_EVENT_CODEBOOK) != configuration["event_codebook_sha256"]:
+        raise RuntimeError("Event codebook changed during preprocessing")
+
+
 def _compact_qc(
     raw: mne.io.BaseRaw,
     analysis: AnalysisConfig,
@@ -128,7 +179,7 @@ def _compact_qc(
     """Return only the metrics needed to inspect preprocessing changes."""
     metrics, _, _, _ = _channel_metrics(
         raw,
-        analysis.filter_hz,
+        analysis.erp_filter_hz,
         analysis.qc,
         already_filtered=already_filtered,
     )
@@ -198,6 +249,7 @@ def _preprocess_recording_into(
     bad_channel_decisions: list[dict] | None = None,
     ica_solution_path: Path | None = None,
     ica_decision_path: Path | None = None,
+    interval_manifest: FixedStudyIntervalManifest | None = None,
     export_eeglab: bool = True,
 ) -> dict:
     """Filter, rereference, interpolate persistent bad EEG channels, and epoch."""
@@ -301,7 +353,7 @@ def _preprocess_recording_into(
 
     raw.load_data(verbose="ERROR")
     signal_picks = mne.pick_types(raw.info, eeg=True, eog=True, ecg=False, exclude=[])
-    low_hz, high_hz = analysis.filter_hz
+    low_hz, high_hz = analysis.erp_filter_hz
     nyquist = float(raw.info["sfreq"]) / 2
     if high_hz >= nyquist:
         raise ValueError(
@@ -315,6 +367,28 @@ def _preprocess_recording_into(
         phase="zero",
         verbose="ERROR",
     )
+    if interval_manifest is not None:
+        interval_application = apply_reviewed_intervals(
+            raw,
+            interval_manifest,
+            participant_id=participant_id,
+            target="epochs",
+            filter_hz=analysis.erp_filter_hz,
+        )
+        core_without_hash = {
+            key: value
+            for key, value in provenance_core.items()
+            if key != "core_sha256"
+        }
+        core_without_hash["interval_review"] = interval_application
+        provenance_core = {
+            **core_without_hash,
+            "core_sha256": canonical_sha256(core_without_hash),
+        }
+    else:
+        interval_application = {
+            "status": "not provided; not a complete fixed-study run"
+        }
     # The comparison starts after the same FIR filter used for both states.
     before_qc = _compact_qc(raw, analysis, already_filtered=True)
 
@@ -334,6 +408,15 @@ def _preprocess_recording_into(
                 "source_manifest_sha256": provenance_core["software"][
                     "source_manifest"
                 ]["sha256"],
+                **(
+                    {
+                        "interval_review_identity": provenance_core[
+                            "interval_review"
+                        ]["identity"]
+                    }
+                    if "interval_review" in provenance_core
+                    else {}
+                ),
             },
         )
     else:
@@ -429,6 +512,12 @@ def _preprocess_recording_into(
     stop_epoch_accounting, stop_lineage = _epoch_accounting(
         stop_events, stop_epochs, stop_metadata
     )
+    go_lineage = _add_reviewed_interval_reasons(
+        go_lineage, interval_application
+    )
+    stop_lineage = _add_reviewed_interval_reasons(
+        stop_lineage, interval_application
+    )
     go_lineage.to_csv(output / "go_epoch_lineage.csv", index=False)
     stop_lineage.to_csv(output / "stop_epoch_lineage.csv", index=False)
     go_epochs.save(
@@ -473,7 +562,8 @@ def _preprocess_recording_into(
     summary = {
         "participant_id": participant_id,
         "source_header": "withheld-private-source",
-        "filter_hz": list(analysis.filter_hz),
+        "erp_filter_hz": list(analysis.erp_filter_hz),
+        "ica_filter_hz": list(analysis.ica_filter_hz),
         "reference": analysis.reference,
         "ecg_removed": "ECG" in type_updates,
         "eog_retained_and_excluded_from_reference": "EOG" in type_updates,
@@ -500,6 +590,7 @@ def _preprocess_recording_into(
             ),
         },
         "ica": ica_summary,
+        "interval_review": interval_application,
     }
     (output / "preprocessing_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -518,7 +609,11 @@ def _preprocess_recording_into(
         != ica_input_hashes
     ):
         raise ValueError("ICA solution or decision table changed during the run")
+    if interval_manifest is not None:
+        interval_manifest.verify_unchanged()
+    _verify_execution_context(provenance_core)
     write_provenance(output, provenance_core)
+    verify_provenance(output)
     return summary
 
 
@@ -530,11 +625,12 @@ def preprocess_recording(
     bad_channel_decisions: list[dict] | None = None,
     ica_solution_path: Path | None = None,
     ica_decision_path: Path | None = None,
+    interval_manifest: FixedStudyIntervalManifest | None = None,
     export_eeglab: bool = True,
 ) -> dict:
     """Create one recording output atomically in a new directory."""
     output = Path(output).expanduser().resolve()
-    if output.exists():
+    if output.exists() or output.is_symlink():
         raise FileExistsError(
             "Auditable preprocessing requires a new output path; reuse is disabled"
         )
@@ -550,9 +646,23 @@ def preprocess_recording(
             bad_channel_decisions=bad_channel_decisions,
             ica_solution_path=ica_solution_path,
             ica_decision_path=ica_decision_path,
+            interval_manifest=interval_manifest,
             export_eeglab=export_eeglab,
         )
+        if interval_manifest is not None:
+            interval_manifest.verify_unchanged()
+        _verify_execution_context(
+            verify_provenance(temporary)
+        )
         temporary.replace(output)
+        try:
+            published = verify_provenance(output)
+            _verify_execution_context(published)
+            if interval_manifest is not None:
+                interval_manifest.verify_unchanged()
+        except Exception:
+            shutil.rmtree(output, ignore_errors=True)
+            raise
         return summary
     except Exception:
         shutil.rmtree(temporary, ignore_errors=True)

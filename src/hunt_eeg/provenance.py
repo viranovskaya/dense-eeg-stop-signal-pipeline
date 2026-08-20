@@ -164,6 +164,8 @@ def build_provenance_core(
             "analysis_sha256": sha256_file(analysis_config_path),
             "event_codebook_sha256": sha256_file(event_codebook_path),
             "filter_hz": list(analysis.filter_hz),
+            "ica_filter_hz": list(analysis.ica_filter_hz),
+            "erp_filter_hz": list(analysis.erp_filter_hz),
             "line_frequency_hz": analysis.line_frequency_hz,
             "montage": analysis.montage,
             "reference": analysis.reference,
