@@ -27,13 +27,21 @@ fits a new solution and records every new decision.
     and restore the final EEG-only average reference.
 
 The EOG and ECG correlations are prompts for inspection. The code never turns
-them into automatic component rejection.
+them into automatic component rejection. No single summary measure is treated
+as an artifact label. Review combines the scalp projection, activation time
+course, spectrum and available auxiliary-channel evidence. In particular,
+elevated 20--40 Hz power alone does not establish a muscle component; the
+interpretation also requires compatible peripheral or focal, spatially
+non-smooth and temporal evidence. If auxiliary evidence is unavailable, a
+component is not assigned an ocular or cardiac label from its map alone.
+Unresolved components are retained in the primary analysis and may be removed
+only in a clearly labelled sensitivity branch.
 
-ICA fitting currently rejects segments already marked with MNE `BAD_*`
-annotations. The temporal channel-QC scan does not itself create segment
-annotations. Before a private rerun, reviewed segment exclusions therefore need
-their own provenance-bound input; otherwise unannotated transient artifacts may
-remain in the ICA fit.
+ICA fitting rejects segments already marked with MNE `BAD_*` annotations. The
+temporal channel-QC scan does not itself create segment annotations. The fixed
+study therefore requires a separate, complete provenance-bound interval table;
+without it the ICA and preprocessing commands stop rather than silently fit on
+unreviewed transient candidates.
 
 ## Decision table
 

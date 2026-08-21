@@ -19,6 +19,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 from hunt_eeg.decisions import load_bad_channel_manifest
+from hunt_eeg.fixed_study_intervals import load_fixed_study_interval_manifest
 from hunt_eeg.preprocess import preprocess_recording
 
 
@@ -29,6 +30,7 @@ def main() -> None:
     parser.add_argument("--vhdr", type=Path, required=True)
     parser.add_argument("--participant-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--interval-manifest", type=Path, required=True)
     parser.add_argument(
         "--bad-channels",
         default="",
@@ -65,6 +67,8 @@ def main() -> None:
             parser.error("No bad-channel review found for this participant")
     else:
         bad_channel_decisions = None
+    interval_manifest = load_fixed_study_interval_manifest(args.interval_manifest)
+    interval_manifest.participant_rows(args.participant_id)
     summary = preprocess_recording(
         args.vhdr,
         args.output,
@@ -73,6 +77,7 @@ def main() -> None:
         bad_channel_decisions=bad_channel_decisions,
         ica_solution_path=args.ica_solution,
         ica_decision_path=args.ica_decisions,
+        interval_manifest=interval_manifest,
         export_eeglab=not args.no_eeglab_export,
     )
     print(f"Preprocessing complete: {args.output.resolve()}")

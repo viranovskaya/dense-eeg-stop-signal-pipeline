@@ -28,6 +28,7 @@ import pandas as pd
 
 from hunt_eeg.dataset import build_dataset_aggregate
 from hunt_eeg.decisions import load_bad_channel_manifest
+from hunt_eeg.fixed_study_intervals import load_fixed_study_interval_manifest
 from hunt_eeg.preprocess import preprocess_recording
 from hunt_eeg.provenance import sha256_file, source_manifest, verify_provenance
 
@@ -39,6 +40,69 @@ def participant_id(path: Path) -> str:
     return match.group(1)
 
 
+def package_participant_id(path: Path) -> str:
+    """Return the three-digit code from one published sub-XXX directory."""
+    match = re.fullmatch(r"sub-(\d{3})", path.name)
+    if not match:
+        raise ValueError(f"Invalid participant package directory: {path.name}")
+    return match.group(1)
+
+
+def verify_dataset_output(path: Path) -> dict:
+    """Verify the exact fixed-study dataset package before and after publication."""
+    path = Path(path)
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError("Dataset output must be a real directory")
+    if any(candidate.is_symlink() for candidate in path.rglob("*")):
+        raise ValueError("Dataset output must not contain symlinks")
+    provenance_path = path / "dataset_provenance.json"
+    payload = json.loads(provenance_path.read_text(encoding="utf-8"))
+    participant_records = {
+        str(record["participant_id"]): record
+        for record in payload.get("participants", [])
+    }
+    participant_dirs = {
+        package_participant_id(candidate): candidate
+        for candidate in path.iterdir()
+        if candidate.is_dir()
+    }
+    if set(participant_dirs) != set(participant_records):
+        raise ValueError("Dataset participant directory set is not exact")
+    if len(participant_records) != 10:
+        raise ValueError("Fixed-study dataset must contain exactly 10 recordings")
+    for participant, package in sorted(participant_dirs.items()):
+        verified = verify_provenance(package)
+        record = participant_records[participant]
+        if (
+            sha256_file(package / "provenance.json")
+            != record["provenance_sha256"]
+            or verified["core_sha256"] != record["core_sha256"]
+        ):
+            raise ValueError(f"Dataset participant binding failed: sub-{participant}")
+
+    declared = {str(record["path"]): record for record in payload.get("outputs", [])}
+    actual = {
+        candidate.name
+        for candidate in path.iterdir()
+        if candidate.is_file() and candidate != provenance_path
+    }
+    if actual != set(declared):
+        raise ValueError("Dataset top-level output set is not exact")
+    for name, record in declared.items():
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts or len(relative.parts) != 1:
+            raise ValueError("Dataset provenance contains an unsafe output path")
+        candidate = path / relative
+        if (
+            not candidate.is_file()
+            or candidate.is_symlink()
+            or candidate.stat().st_size != record["size_bytes"]
+            or sha256_file(candidate) != record["sha256"]
+        ):
+            raise ValueError(f"Dataset output verification failed: {name}")
+    return payload
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Preprocess all BrainVision recordings."
@@ -46,6 +110,7 @@ def main() -> None:
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--bad-channel-manifest", type=Path, required=True)
+    parser.add_argument("--interval-manifest", type=Path, required=True)
     parser.add_argument("--no-eeglab-export", action="store_true")
     parser.add_argument(
         "--ica-review-root",
@@ -78,6 +143,16 @@ def main() -> None:
     participants = [participant_id(header) for header in headers]
     if len(participants) != len(set(participants)):
         raise SystemExit("Input contains more than one header for a participant")
+    if len(participants) != 10:
+        raise SystemExit(
+            "The frozen publication run requires exactly 10 recordings; "
+            f"found {len(participants)}"
+        )
+    interval_manifest = load_fixed_study_interval_manifest(
+        args.interval_manifest,
+        expected_participants=participants,
+    )
+    initial_interval_manifest_sha256 = interval_manifest.sha256
     manifest_participants = set(decisions_by_participant)
     missing_reviews = sorted(set(participants) - manifest_participants)
     extra_reviews = sorted(manifest_participants - set(participants))
@@ -114,7 +189,7 @@ def main() -> None:
         initial_ica_decision_sha256 = None
         initial_ica_solution_hashes = {}
     requested_output = args.output.expanduser().resolve()
-    if requested_output.exists():
+    if requested_output.exists() or requested_output.is_symlink():
         raise SystemExit(
             "Dataset preprocessing requires a new output directory; resume and "
             "in-place reuse are disabled"
@@ -151,6 +226,7 @@ def main() -> None:
             bad_channel_decisions=decisions,
             ica_solution_path=ica_solutions.get(participant),
             ica_decision_path=ica_decision_manifest,
+            interval_manifest=interval_manifest,
             export_eeglab=not args.no_eeglab_export,
         )
         summaries[participant] = summary
@@ -264,6 +340,16 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
             raise RuntimeError(
                 f"Source changed during dataset run before sub-{participant}"
             )
+        expected_interval_identity = interval_manifest.identity(participant)
+        if (
+            payload.get("interval_review", {}).get("identity")
+            != expected_interval_identity
+            or payload.get("interval_review", {}).get("application_target")
+            != "epochs"
+        ):
+            raise RuntimeError(
+                f"Interval review context mismatch for sub-{participant}"
+            )
         participant_records.append(
             {
                 "participant_id": participant,
@@ -281,6 +367,9 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
         "schema_version": "1",
         "source_manifest": initial_source_manifest,
         "bad_channel_manifest_sha256": initial_manifest_sha256,
+        "fixed_study_interval_manifest_sha256": (
+            initial_interval_manifest_sha256
+        ),
         "ica": {
             "decision_manifest_sha256": initial_ica_decision_sha256,
             "solution_sha256_by_participant": initial_ica_solution_hashes,
@@ -301,8 +390,10 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
         json.dumps(dataset_provenance, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    verify_dataset_output(output)
     if sha256_file(manifest_path) != initial_manifest_sha256:
         raise RuntimeError("Bad-channel manifest changed during dataset run")
+    interval_manifest.verify_unchanged()
     if source_manifest()["sha256"] != initial_source_manifest["sha256"]:
         raise RuntimeError("Executable source changed during dataset run")
     if ica_decision_manifest is not None:
@@ -314,7 +405,26 @@ Participant-level values remain available in `dataset_preprocessing_summary.csv`
         }
         if final_ica_solution_hashes != initial_ica_solution_hashes:
             raise RuntimeError("ICA solution changed during dataset run")
+    verify_dataset_output(output)
     output.replace(requested_output)
+    try:
+        verify_dataset_output(requested_output)
+        if sha256_file(manifest_path) != initial_manifest_sha256:
+            raise RuntimeError("Bad-channel manifest changed during publication")
+        interval_manifest.verify_unchanged()
+        if source_manifest()["sha256"] != initial_source_manifest["sha256"]:
+            raise RuntimeError("Executable source changed during publication")
+        if ica_decision_manifest is not None:
+            if sha256_file(ica_decision_manifest) != initial_ica_decision_sha256:
+                raise RuntimeError("ICA decision manifest changed during publication")
+            if {
+                participant: sha256_file(path)
+                for participant, path in sorted(ica_solutions.items())
+            } != initial_ica_solution_hashes:
+                raise RuntimeError("ICA solution changed during publication")
+    except BaseException:
+        shutil.rmtree(requested_output, ignore_errors=True)
+        raise
     atexit.unregister(cleanup)
     print(f"Dataset preprocessing complete: {requested_output}")
 

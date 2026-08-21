@@ -33,6 +33,8 @@ class AnalysisConfig:
 
     line_frequency_hz: float
     filter_hz: tuple[float, float]
+    ica_filter_hz: tuple[float, float]
+    erp_filter_hz: tuple[float, float]
     montage: str
     reference: str
     channel_types: dict[str, str]
@@ -102,6 +104,8 @@ def load_analysis_config(path: Path = DEFAULT_ANALYSIS_CONFIG) -> AnalysisConfig
     required = {
         "line_frequency_hz",
         "filter_hz",
+        "ica_filter_hz",
+        "erp_filter_hz",
         "montage",
         "reference",
         "channel_types",
@@ -113,13 +117,16 @@ def load_analysis_config(path: Path = DEFAULT_ANALYSIS_CONFIG) -> AnalysisConfig
     if missing:
         raise ValueError(f"Analysis config is missing required fields: {missing}")
 
-    filter_hz = tuple(float(value) for value in payload["filter_hz"])
-    if (
-        len(filter_hz) != 2
-        or not all(math.isfinite(value) for value in filter_hz)
-        or not 0 <= filter_hz[0] < filter_hz[1]
-    ):
-        raise ValueError("filter_hz must contain increasing low and high cutoffs")
+    filters: dict[str, tuple[float, float]] = {}
+    for name in ("filter_hz", "ica_filter_hz", "erp_filter_hz"):
+        values = tuple(float(value) for value in payload[name])
+        if (
+            len(values) != 2
+            or not all(math.isfinite(value) for value in values)
+            or not 0 <= values[0] < values[1]
+        ):
+            raise ValueError(f"{name} must contain increasing low and high cutoffs")
+        filters[name] = values
 
     epochs_seconds: dict[str, tuple[float, float]] = {}
     for condition in ("go", "stop"):
@@ -212,7 +219,9 @@ def load_analysis_config(path: Path = DEFAULT_ANALYSIS_CONFIG) -> AnalysisConfig
 
     return AnalysisConfig(
         line_frequency_hz=line_frequency_hz,
-        filter_hz=filter_hz,
+        filter_hz=filters["filter_hz"],
+        ica_filter_hz=filters["ica_filter_hz"],
+        erp_filter_hz=filters["erp_filter_hz"],
         montage=str(payload["montage"]),
         reference=reference,
         channel_types=channel_types,

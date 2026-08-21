@@ -9,6 +9,9 @@ results/
 *.fif
 *.mat
 
+# Controlled internal analysis reports are not public repository artifacts.
+docs/manuscript_stop_signal.md
+
 # Local runtime/cache files.
 .cache/
 .venv/

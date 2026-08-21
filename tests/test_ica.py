@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,8 +27,10 @@ from hunt_eeg.ica import (
     ica_decimation,
     load_ica_config,
     load_ica_decisions,
+    prepare_ica_input,
     run_ica_review,
 )
+from hunt_eeg.fixed_study_intervals import load_fixed_study_interval_manifest
 from hunt_eeg.provenance import verify_provenance
 
 
@@ -37,6 +40,27 @@ class _Sources:
 
     def get_data(self) -> np.ndarray:
         return self._data
+
+
+class ICAReviewCLITests(unittest.TestCase):
+    def test_review_cli_forces_headless_matplotlib_backend(self):
+        script = PROJECT_ROOT / "scripts" / "run_ica_review.py"
+        code = (
+            "import importlib.util, matplotlib; "
+            f"spec=importlib.util.spec_from_file_location('review_cli', {str(script)!r}); "
+            "module=importlib.util.module_from_spec(spec); "
+            "spec.loader.exec_module(module); "
+            "assert matplotlib.get_backend().lower() == 'agg'"
+        )
+        environment = {**os.environ, "MPLBACKEND": "MacOSX"}
+        completed = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 class _FakeICA:
@@ -126,6 +150,24 @@ def _brainvision_stub(root: Path) -> Path:
 
 
 class ICAWorkflowTests(unittest.TestCase):
+    def test_ica_input_uses_the_declared_ica_filter(self):
+        raw = _raw()
+        decisions = [
+            {
+                "channel": "F3",
+                "decision": "keep",
+                "reason": "reviewed and retained",
+                "reviewer": "reviewer",
+                "reviewed_at": "2026-08-17",
+                "evidence_windows": "full recording",
+            }
+        ]
+        with patch("hunt_eeg.ica._read_brainvision_compat", return_value=raw):
+            prepared = prepare_ica_input(Path("unused.vhdr"), decisions)
+
+        self.assertEqual(prepared.info["highpass"], 1.0)
+        self.assertEqual(prepared.info["lowpass"], 40.0)
+
     def test_config_is_explicit_and_does_not_enable_automatic_exclusion(self):
         config = load_ica_config()
 
@@ -325,6 +367,40 @@ class ICAWorkflowTests(unittest.TestCase):
         self.assertTrue(np.all(original.get_data() == 0))
         self.assertTrue(np.all(cleaned.get_data(picks=["F3"]) == 1))
 
+    def test_review_solution_must_match_fixed_interval_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            solution = root / "ica_solution.fif"
+            solution.write_bytes(b"solution")
+            decisions = root / "decisions.csv"
+            decisions.write_text("unused\n", encoding="utf-8")
+            base = {
+                "workflow": "ica_component_review",
+                "participant_id": "test",
+                "inputs": [],
+                "configuration": {"analysis_sha256": "analysis"},
+                "bad_channel_decisions": [],
+                "software": {"source_manifest": {"sha256": "source"}},
+                "interval_review": {"identity": {"manifest_sha256": "old"}},
+            }
+            with (
+                patch("hunt_eeg.ica.verify_provenance", return_value=base),
+                self.assertRaisesRegex(ValueError, "does not match"),
+            ):
+                apply_reviewed_ica(
+                    _raw(),
+                    participant_id="test",
+                    solution_path=solution,
+                    decision_path=decisions,
+                    expected_context={
+                        "inputs": [],
+                        "analysis_sha256": "analysis",
+                        "bad_channel_decisions": [],
+                        "source_manifest_sha256": "source",
+                        "interval_review_identity": {"manifest_sha256": "new"},
+                    },
+                )
+
     def test_review_package_is_atomic_private_and_provenance_verified(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -343,6 +419,13 @@ class ICAWorkflowTests(unittest.TestCase):
             ]
             prepared = _raw()
             prepared.filter(None, 40.0, picks="data", verbose="ERROR")
+            interval_path = root / "intervals.csv"
+            interval_path.write_text(
+                "participant_id,interval_id,decision,start_s,stop_s,scope,reason,reviewer,reviewed_at,evidence\n"
+                "test,artifact01,exclude,0.2,0.4,both,reviewed transient,reviewer,2026-08-18,raw zoom\n",
+                encoding="utf-8",
+            )
+            interval_manifest = load_fixed_study_interval_manifest(interval_path)
             with (
                 patch("hunt_eeg.ica.prepare_ica_input", return_value=prepared),
                 patch("hunt_eeg.ica.fit_ica", return_value=_FakeICA()),
@@ -353,12 +436,20 @@ class ICAWorkflowTests(unittest.TestCase):
                     output,
                     participant_id="test",
                     bad_channel_decisions=decisions,
+                    interval_manifest=interval_manifest,
                 )
             provenance = verify_provenance(output)
 
         self.assertEqual(summary["components"], 3)
         self.assertIn("Private derived output", summary["privacy"])
         self.assertEqual(provenance["workflow"], "ica_component_review")
+        self.assertEqual(
+            provenance["interval_review"]["identity"]["manifest_sha256"],
+            interval_manifest.sha256,
+        )
+        self.assertEqual(
+            provenance["interval_review"]["application_target"], "ica"
+        )
         self.assertNotIn("private-name", str(provenance))
 
 

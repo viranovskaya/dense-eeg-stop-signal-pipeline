@@ -10,32 +10,32 @@
     "auxiliary_correlation": {
       "ecg": {
         "channels_compared": 127,
-        "maximum_absolute_correlation_after": 0.049400013629501784,
-        "maximum_absolute_correlation_before": 0.176474526480538,
-        "median_absolute_correlation_after": 0.01228384671881433,
-        "median_absolute_correlation_before": 0.07384490837726275
+        "maximum_absolute_correlation_control": 0.1583498802588253,
+        "maximum_absolute_correlation_reviewed": 0.04340094670562956,
+        "median_absolute_correlation_control": 0.0681413638509421,
+        "median_absolute_correlation_reviewed": 0.01116812860332461
       },
       "eog": {
         "channels_compared": 127,
-        "maximum_absolute_correlation_after": 0.028169337497671268,
-        "maximum_absolute_correlation_before": 0.2954079273223865,
-        "median_absolute_correlation_after": 0.005530755610301195,
-        "median_absolute_correlation_before": 0.12960970433775826
+        "maximum_absolute_correlation_control": 0.35762239265502777,
+        "maximum_absolute_correlation_reviewed": 0.07124052267092734,
+        "median_absolute_correlation_control": 0.1606854133029982,
+        "median_absolute_correlation_reviewed": 0.01746607146043713
       }
     },
     "signal_preservation": {
       "band_power": {
         "channel_band_values": 508,
-        "maximum_absolute_change_db": 0.9940547086258325,
-        "median_absolute_change_db": 0.08216840367697781,
-        "p95_absolute_change_db": 0.6452354823080523
+        "maximum_absolute_change_db": 0.9958260527078533,
+        "median_absolute_change_db": 0.08214163894217685,
+        "p95_absolute_change_db": 0.6488237923412147
       },
       "task_signal": {
         "channels": [
           "C3",
           "C4"
         ],
-        "maximum_peak_amplitude_change_uv": 0.2302129212597297,
+        "maximum_peak_amplitude_change_uv": 0.19960300091062777,
         "maximum_peak_latency_change_ms": 0.0
       }
     }
@@ -72,10 +72,11 @@
     ]
   },
   "provenance": {
-    "fixture_provenance_sha256": "f5428a75b506367f8f1e55d1907da323883a1ff4aa5056dfb006693155a747db",
-    "processed_provenance_sha256": "df8d030aa5aeff2b7a5061fdb1af36cf8cfa83c452cb6893ca46cd5da054adea",
-    "review_provenance_sha256": "2cc5dea299b9c58bac8ef134d7935689ba7a5ba7055a50b73697d7f1f3d9cac4",
-    "source_manifest_sha256": "628675817b2b03ce3932800aa6bf559814ee960c0f3583ea1eda3d7c0880b9e5"
+    "control_processed_provenance_sha256": "6a17ac24270f7c24c59f1358880889a7a5d70be20b4f51c395e9540f3c1a1281",
+    "fixture_provenance_sha256": "a486d95bd25b1d0b048e0dc290cd31b84ec29160056f68172e978dad29804bde",
+    "processed_provenance_sha256": "a30fac813b4f652235528137c39f0740dc0e67a6c62d50b211531c4cac35480c",
+    "review_provenance_sha256": "9176829ad37807a4850c2ad16507de1d1260a8347b9ec82b9b75b3c2821850c6",
+    "source_manifest_sha256": "1421774546e2d7c26cbb52af0d6eb8e76afd9a4f5fb92210b7510a650472ff28"
   },
   "runtime": {
     "packages": {
@@ -90,6 +91,6 @@
     },
     "python": "3.13.7"
   },
-  "schema_version": 1,
-  "scope": "One fixed public synthetic integration fixture. Component decisions were made explicitly after review. Results do not establish automatic artifact classification or generalization to participant EEG."
+  "schema_version": 2,
+  "scope": "One fixed public synthetic integration fixture. Component decisions were made explicitly after review. Signal checks compare the reviewed output with a matched output that retained all ICA components; all other processing decisions are identical. Results do not establish automatic artifact classification or generalization to participant EEG."
 }
